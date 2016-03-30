@@ -181,6 +181,10 @@ Optional properties :
 	which is used as a vote by driver to get max performance in perf mode.
 - qcom,default-mode-svs: Indicates USB system clock should run at SVS frequency.
 	User can bump it up using 'perf_mode' sysfs attribute for gadget.
+- qcom,floated-charger-enable: Floating charger detection can be one of
+             0 - Floating charger as SDP
+             1 - Floating charger as DCP
+             2 - Floating charger as Invalid
 
 Example HSUSB OTG controller device node :
 	usb@f9690000 {
