@@ -186,6 +186,10 @@ Optional properties :
 - qcom,usbeth-reset-gpio: If present then an external usb-to-eth is connected to
 	the USB host controller and its RESET_N signal is connected to this
 	usbeth-reset-gpio GPIO. It should be driven LOW to RESET the usb-to-eth.
+- qcom,floated-charger-enable: Floating charger detection can be one of
+             0 - Floating charger as SDP
+             1 - Floating charger as DCP
+             2 - Floating charger as Invalid
 
 Example HSUSB OTG controller device node :
 	usb@f9690000 {
