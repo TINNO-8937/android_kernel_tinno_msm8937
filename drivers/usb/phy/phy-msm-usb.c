@@ -1549,7 +1549,7 @@ static int msm_otg_resume(struct msm_otg *motg)
 	disable_irq(motg->irq);
 	if (motg->phy_irq)
 		disable_irq(motg->phy_irq);
-	wake_lock(&motg->wlock);
+	//wake_lock(&motg->wlock);
 
 	/*
 	 * If we are resuming from the device bus suspend, restore
