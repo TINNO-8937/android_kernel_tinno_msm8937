@@ -48,6 +48,10 @@ MODULE_DEVICE_TABLE(of, msm_match_table);
 #define MAX_BUFFER_SIZE			(320)
 #define WAKEUP_SRC_TIMEOUT		(2000)
 #define MAX_RETRY_COUNT			3
+//TINNO BEGIN
+//mengchun.li@tinno.com, 20171028, JIRA: IAAO-135
+#define HW_INFO_CHECK     0
+//TINNO END
 
 struct nqx_dev {
 	wait_queue_head_t	read_wq;
@@ -630,6 +634,9 @@ static const struct file_operations nfc_dev_fops = {
 };
 
 /* Check for availability of NQ_ NFC controller hardware */
+//TINNO BEGIN
+//mengchun.li@tinno.com, 20171028, JIRA: IAAO-135
+#if HW_INFO_CHECK
 static int nfcc_hw_check(struct i2c_client *client, struct nqx_dev *nqx_dev)
 {
 	int ret = 0;
@@ -745,6 +752,8 @@ err_nfcc_hw_check:
 done:
 	return ret;
 }
+#endif
+//TINNO end
 
 /*
 	Routine to enable clock.
@@ -1052,6 +1061,9 @@ static int nqx_probe(struct i2c_client *client,
 	 * present before attempting further hardware initialisation.
 	 *
 	 */
+//TINNO BEGIN
+//mengchun.li@tinno.com, 20171028, JIRA: IAAO-135
+#if HW_INFO_CHECK
 	r = nfcc_hw_check(client , nqx_dev);
 	if (r) {
 		/* make sure NFCC is not enabled */
@@ -1059,6 +1071,8 @@ static int nqx_probe(struct i2c_client *client,
 		/* We don't think there is hardware switch NFC OFF */
 		goto err_request_hw_check_failed;
 	}
+#endif
+//TINNO END
 
 	/* Register reboot notifier here */
 	r = register_reboot_notifier(&nfcc_notifier);

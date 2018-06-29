@@ -409,6 +409,15 @@ static void do_msm_poweroff(void)
 	return;
 }
 
+#ifdef CONFIG_TINNO_BATTERY_FEATURE//<REQ><HCADCNA-262><P7203CE_SUG_CN_6.0:poweroff,when low battery power>lijian-20160824--start
+void do_kernel_power_off(void)
+{
+	do_msm_poweroff();
+}
+EXPORT_SYMBOL_GPL(do_kernel_power_off);
+#endif//<REQ><HCADCNA-262><P7203CE_SUG_CN_6.0:poweroff,when low battery power>lijian-20160824--end
+
+
 #ifdef CONFIG_MSM_DLOAD_MODE
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)

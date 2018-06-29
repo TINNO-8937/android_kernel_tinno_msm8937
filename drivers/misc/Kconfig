@@ -553,6 +553,12 @@ config VEXPRESS_SYSCFG
 	  bus. System Configuration interface is one of the possible means
 	  of generating transactions on this bus.
 
+config TINNO_KE_DBUG
+   tristate "support tinno kernel debug!"
+   default y
+   help
+    This option enables support tinno kernel debug.    
+
 config UID_SYS_STATS
 	bool "Per-UID statistics"
 	depends on PROFILING
@@ -613,6 +619,17 @@ config MEMORY_STATE_TIME
 	help
 	  Memory time statistics exported to /sys/kernel/memory_state_time
 
+#BEGIN<REQ><FCEBL-64><20150901>Add store lcd  info;xiongdajun 
+config DEV_INFO
+	tristate "peripheral ic info"
+	default n
+
+#add for aux camera info by lhm 2017-0608
+config CAMERA_AUX_INFO
+   tristate "add aux camera info"
+   help
+    This option enables supportadd camera aux info.
+#end by lhm
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

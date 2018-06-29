@@ -83,3 +83,13 @@ obj-$(CONFIG_MSM_BCL_CTL)	+= msm_bcl.o
 obj-$(CONFIG_MSM_BCL_PERIPHERAL_CTL) += bcl_peripheral.o
 obj-$(CONFIG_POWER_RESET)	+= reset/
 obj-$(CONFIG_ARCH_MSM)		+= qcom/
+
+# TINNO BEGIN
+# FEATURE_REQS_UNIFY, lejun.wang, DATE20161025, for wiko unify
+FEATURE_REQS_UNIFY := $(strip $(subst ro.feature.reqsunify =,,$(shell cat $(PWD)/build.ini |grep ^ro.feature.reqsunify)))
+ifeq ($(strip $(FEATURE_REQS_UNIFY)),1)
+ccflags-y += -DFEATURE_REQS_UNIFY
+$(warning ---add local macro FEATURE_REQS_UNIFY---)
+endif
+# TINNO END
+

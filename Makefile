@@ -409,6 +409,13 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -std=gnu89
 
+#Tinno:CJ add our define here {
+#$(warning COMMON_TINNO_CFLAGS $(COMMON_TINNO_CFLAGS))
+#$(warning COMMON_TINNO_JOURNEY_CFLAGS $(COMMON_TINNO_JOURNEY_CFLAGS))
+KBUILD_CFLAGS += $(COMMON_TINNO_CFLAGS) $(COMMON_TINNO_JOURNEY_CFLAGS)
+$(warning KBUILD_CFLAGS $(KBUILD_CFLAGS))
+# }
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__

@@ -73,3 +73,5 @@ obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_APDS9930)		+= apds993x.o
 obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
+obj-$(CONFIG_TINNO_KE_DBUG)       += tinno_kernel_debug.o
+obj-$(CONFIG_DEV_INFO)	+= dev_info.o

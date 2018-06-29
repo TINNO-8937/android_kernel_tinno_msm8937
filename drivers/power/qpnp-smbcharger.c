@@ -40,6 +40,40 @@
 #include <linux/ktime.h>
 #include <linux/pmic-voter.h>
 
+#if defined (CONFIG_TINNO_BATTERY_CMD_DEBUG)
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include "../../fs/proc/internal.h"
+#endif  /* CONFIG_TINNO_BATTERY_CMD_DEBUG */
+
+#ifdef CONFIG_TINNO_NO_BATID
+extern const char* Tinno_battery_name;
+#endif
+
+#define TINNO_SPECIAL_TEMP_SETTING
+#define ENABLE_SMART_CHARGING_CONTROL //enable smart charging control.
+// pony.ma, DATE20171009, ID usb wk battery model, DATE20171009-01 START
+#ifdef FEATURE_REQS_UNIFY
+extern char* Market_Area;
+bool is_Asia_area_id_bat= false;
+static void Tinno_Get_Market_Area_is_Asia(void)
+{
+	pr_info("pony1009 Market_Area=%s\n",Market_Area);
+	if((Market_Area != NULL) &&  (!strcmp(Market_Area, "ID"))){
+			is_Asia_area_id_bat = true;
+	}
+}
+#endif
+// pony.ma, DATE20171009-01 END
+
+// pony.ma, DATE20171010, Define project battery capacity for 3rd apk, DATE20171010-01 LINE
+int tinno_battery_capacity;
+
+// pony.ma, DATE20180102, support slow insert usb charge, DATE20180102-01 LINE
+static int rerun_count = 0;
+
+bool g_do_not_support_qc=false;//LINE<20160720><don't support qc>wangyanhui
+
 /* Mask/Bit helpers */
 #define _SMB_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
@@ -96,6 +130,37 @@ struct smbchg_version_tables {
 	int				rchg_thr_mv;
 };
 
+// pony.ma, DATE20161011, add temp FCC for project requirement, DATE20161011-01 START
+#ifdef CONFIG_TINNO_FCC
+#define SMBCHG_TEMP_CONTROL_DELAY_MS      10000
+#endif  /* CONFIG_TINNO_FCC */
+// pony.ma, DATE20161011-01 END
+
+// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 LINE
+#define SMBCHG_GET_INPUT_VOLTAGE_DELAY_MS      1000
+
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+#define SMBCHG_SMART_CHARGING_CONTROL_DELAY_MS      2000
+#define SMBCHG_SMART_CHARGING_CONTROL_RESTORE_MS    500
+
+#define FUNC_ENTER()        pr_info("\n")
+#define SPEED_CURRENT_PROP  "qcom,speed-current"
+
+enum {
+	SPEED_0 = 0,
+	SPEED_1,
+	SPEED_2,
+	SPEED_3,
+	SPEED_4,
+	SPEED_5,
+	SPEED_6,
+	SPEED_7,
+	SPEED_8,
+	SPEED_9,
+	SPEED_MAX
+};
+#endif
+
 struct smbchg_chip {
 	struct device			*dev;
 	struct spmi_device		*spmi;
@@ -122,6 +187,7 @@ struct smbchg_chip {
 	int				fastchg_current_ma;
 	int				vfloat_mv;
 	int				fastchg_current_comp;
+	int             no_parallel_defualt_dcp_icl_ma;//LINE<REQ><><DEFUALT USB DCP ICL SET TO 1400MA><20160708>huiyong.yin
 	int				float_voltage_comp;
 	int				resume_delta_mv;
 	int				safety_time;
@@ -284,7 +350,40 @@ struct smbchg_chip {
 	struct votable			*hw_aicl_rerun_disable_votable;
 	struct votable			*hw_aicl_rerun_enable_indirect_votable;
 	struct votable			*aicl_deglitch_short_votable;
+
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+	int				current_speed;
+	int             target_speed;   //target speed set by app layer.
+	int             speed_current_map[SPEED_MAX];   //actual current/ma for speed level.
+	bool            speed_restoring;    //indicating if a speed restoration is in process.
+	struct delayed_work             smart_charging_control_work;
+#endif
+
 	struct votable			*hvdcp_enable_votable;
+	
+	// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC
+	bool        fastchg_temp_initial;
+	struct delayed_work		fastchg_temp_control_work;
+	#endif  /* CONFIG_TINNO_FCC */
+
+	// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 LINE
+	struct delayed_work		get_input_voltage_work;
+	
+   	#if defined (CONFIG_TINNO_FCC_INTMODE) || defined (CONFIG_TINNO_FCC)
+	bool 	enable_cool_fastchg_current_comp;
+	int		fastchg_current_comp_low;
+	int		fastchg_temp_min_bat_decidegc;
+	int		fastchg_temp_s1_bat_decidegc;
+	int 		fastchg_temp_s2_bat_decidegc;
+	int		fastchg_temp_max_bat_decidegc;
+	int		fastchg_temp_current_low;
+	int		fastchg_temp_current_high;
+	// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+	bool		fastchg_warm_status;      //0: warm temp=26;  1:warm temp=45   pony 20161123
+	bool		fastchg_cool_status;      //0: cool temp=25;  1:cool temp=10   pony 20161123
+   	#endif  /* CONFIG_TINNO_FCC_INTMODE */   	
+	// pony.ma, DATE20161114-01 END
 };
 
 enum qpnp_schg {
@@ -334,12 +433,23 @@ enum wake_reason {
 	PM_ESR_PULSE = BIT(2),
 	PM_PARALLEL_TAPER = BIT(3),
 	PM_DETECT_HVDCP = BIT(4),
+	// pony.ma, DATE20161011, add temp FCC for project requirement, DATE20161011-01 START
+	#ifdef CONFIG_TINNO_FCC
+	PM_FCC_TEMP = BIT(5),
+	#endif  /* CONFIG_TINNO_FCC */
+	// pony.ma, DATE20161011-01 END
 };
 
 /* fcc_voters */
 #define ESR_PULSE_FCC_VOTER	"ESR_PULSE_FCC_VOTER"
 #define BATT_TYPE_FCC_VOTER	"BATT_TYPE_FCC_VOTER"
 #define RESTRICTED_CHG_FCC_VOTER	"RESTRICTED_CHG_FCC_VOTER"
+	
+// pony.ma, DATE20161114, optimize code, DATE20161114-01 START
+#if defined (CONFIG_TINNO_FCC)  || defined(CONFIG_TINNO_FCC_INTMODE)
+#define BATT_NORTEMP_FCC_VOTER   "BATT_NORTEMP_FCC_VOTER"
+#endif /* CONFIG_TINNO_FCC || CONFIG_TINNO_FCC_INTMODE */
+// pony.ma, DATE20161114-01 END
 
 /* ICL VOTERS */
 #define PSY_ICL_VOTER		"PSY_ICL_VOTER"
@@ -417,7 +527,9 @@ enum wake_reason {
 #define	HVDCP_OTG_VOTER			"HVDCP_OTG_VOTER"
 #define	HVDCP_PULSING_VOTER		"HVDCP_PULSING_VOTER"
 
-static int smbchg_debug_mask;
+
+static int smbchg_debug_mask = PR_INTERRUPT|PR_STATUS;
+//static int smbchg_debug_mask;
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -491,6 +603,175 @@ module_param_named(
 		else							\
 			pr_debug_ratelimited(fmt, ##__VA_ARGS__);	\
 	} while (0)
+        
+#if defined (CONFIG_TINNO_BATTERY_CMD_DEBUG)
+/**********************************************************************************************************
+* Add debug interface for app debug.
+* Command: adb shell "echo 'CMD VALUE' > /proc/tinno_battery_cmd/battery_cmd"
+* CMD from 1 to 6
+* CMD=1, enable or disable battery debug mode; 1 is enable, 0 disable.
+* CMD=2, set battery status; 0: unknown, 1: charging, 2: discharging, 3: not charging, 4: full
+* CMD=3, set battery health; 0: unknown, 1: good, 2: over heat, 3: dead, 4: over voltage, 5: unspec failure, 
+       6: cold, 7: watchdog timeout, 8: safety timeout, 9: warm, 10: cold
+* CMD=4, set battery capacity; VALUE is the capacity.
+* CMD=5, set battery temperature; VALUE is the temperature*10.
+* CMD=6, update charger and fg power supply; VALUE ignore.
+**********************************************************************************************************/
+enum {
+	BATTERY_CMD_UNKNOWN = 0,
+	BATTERY_CMD_MODE = 1,       // enable or disable battery debug mode
+	BATTERY_CMD_STATUS = 2,     // set battery status
+	BATTERY_CMD_HEALTH = 3,     // set battery health
+	BATTERY_CMD_CAPACITY = 4,   // set battery capacity
+	BATTERY_CMD_TEMPERATURE = 5,// set battery temperature
+	BATTERY_CMD_UPDATE,         // update charger and fg power supply now
+	BATTERY_CMD_MAX,
+};
+
+int g_battery_cmd_debug_mode = 0;
+static int g_battery_cmd_debug_status = 0xffff; //POWER_SUPPLY_STATUS_DISCHARGING;
+static int g_battery_cmd_debug_health = 0xffff; //POWER_SUPPLY_HEALTH_GOOD;
+int g_battery_cmd_debug_capacity = 0xffff; //50;
+int g_battery_cmd_debug_temperature = 0xffff; //250;
+//{ Added by LiZidong
+#ifdef CONFIG_PROJECT_I9031
+static bool charger_present_flag = false;
+#endif
+//}
+
+extern struct proc_dir_entry *g_battery_cmd_dir;
+static struct smbchg_chip *g_battery_cmd_chg_chip = NULL;
+struct smbchg_chip *g_battery_cmd_fg_chip = NULL;
+
+static ssize_t battery_cmd_write(struct file *file, const char *buffer, size_t count, loff_t *data)
+{
+    int len = 0, bat_cmd_mode = 0, bat_cmd_value = 0;
+    char desc[32];
+
+    len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
+    if (copy_from_user(desc, buffer, len))
+        return 0;
+    desc[len] = '\0';
+
+    if (sscanf(desc, "%d %d", &bat_cmd_mode, &bat_cmd_value) == 2)
+    {
+        printk("bat_cmd_mode=%d, bat_cmd_value=%d\n", bat_cmd_mode, bat_cmd_value);
+
+        switch (bat_cmd_mode)
+        {
+            case BATTERY_CMD_MODE:
+                g_battery_cmd_debug_mode = bat_cmd_value;
+                break;
+                
+            case BATTERY_CMD_STATUS:
+                g_battery_cmd_debug_status = bat_cmd_value;
+                break;
+                
+            case BATTERY_CMD_HEALTH:
+                g_battery_cmd_debug_health = bat_cmd_value;
+                break;
+                
+            case BATTERY_CMD_CAPACITY:
+                g_battery_cmd_debug_capacity = bat_cmd_value;
+                break;
+                
+            case BATTERY_CMD_TEMPERATURE:
+                g_battery_cmd_debug_temperature = bat_cmd_value;
+                break;
+                
+            case BATTERY_CMD_UPDATE:
+                if (g_battery_cmd_chg_chip)
+                {
+                    // update charger power supply
+		            power_supply_changed(&g_battery_cmd_chg_chip->batt_psy);    
+
+                    // update fg power supply
+                	if (!g_battery_cmd_chg_chip->bms_psy && g_battery_cmd_chg_chip->bms_psy_name)
+                		g_battery_cmd_chg_chip->bms_psy =
+                			power_supply_get_by_name((char *)g_battery_cmd_chg_chip->bms_psy_name);
+                	if (!g_battery_cmd_chg_chip->bms_psy) {
+                		printk("no bms psy found\n");
+                		return -EINVAL;
+                	}
+                    
+		            power_supply_changed(g_battery_cmd_chg_chip->bms_psy); 
+                }
+                break;
+        }
+
+        return count;
+    } /*else {*/
+    printk("bad argument, echo [bat_cmd_mode] [bat_cmd_value] > battery_cmd\n");
+    /*}*/
+
+    return -EINVAL;
+}
+
+static int proc_utilization_show(struct seq_file *m, void *v)
+{
+    seq_printf(m,
+               "=> mode=%d,\nstatus=%d,\nhealth=%d,\ncapacity=%d,\ntemperature=%d,\n",
+               g_battery_cmd_debug_mode, 
+               g_battery_cmd_debug_status,
+               g_battery_cmd_debug_health,
+               g_battery_cmd_debug_capacity,
+               g_battery_cmd_debug_temperature);
+    return 0;
+}
+
+static int proc_utilization_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, proc_utilization_show, NULL);
+}
+
+const struct file_operations battery_cmd_proc_fops =
+{
+    .open = proc_utilization_open,
+    .read = seq_read,
+    .write = battery_cmd_write,
+};
+
+static void smbchg_battery_debug_init(void)
+{
+    struct proc_dir_entry *battery_dir = NULL;
+
+    battery_dir = proc_mkdir("tinno_battery_cmd", NULL);
+    if (NULL == battery_dir)
+    {
+        printk("create tinno_battery_cmd error!\n");
+        return ;
+    }
+
+    proc_create("battery_cmd", S_IRUGO | S_IWUSR, battery_dir, &battery_cmd_proc_fops);
+        
+}
+#endif  /* CONFIG_TINNO_BATTERY_CMD_DEBUG */
+
+static int get_prop_batt_capacity(struct smbchg_chip *chip);
+
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+static int smbchg_charge_speed_set(struct smbchg_chip *chip, int speed);
+#endif
+
+// pony.ma, DATE20161114, optimize name, DATE20161114-01 START	
+#ifdef CONFIG_TINNO_FCC
+static int smbchg_set_fastchg_temp_current(struct smbchg_chip *chip);
+#endif  /* CONFIG_TINNO_FCC */ 
+// pony.ma, DATE20161114-01 END
+
+#ifdef CONFIG_TINNO_KE_LOG_CTRL//add charger log contrl by lijian
+extern char * module_parser_mask(char *module);
+static void open_charger_debug_log(void)
+{
+	char *temp = module_parser_mask("msm_chg");
+	if(temp != NULL)
+	{
+		printk("%s, temp = %s\n",__func__,temp);
+		if(!strncmp(temp,"1",1))
+			smbchg_debug_mask = 0xFF;
+	}
+}
+#endif
 
 static int smbchg_read(struct smbchg_chip *chip, u8 *val,
 			u16 addr, int count)
@@ -909,6 +1190,21 @@ static void read_usb_type(struct smbchg_chip *chip, char **usb_type_name,
 	*usb_supply_type = get_usb_supply_type(type);
 }
 
+//{ Added by LiZidong
+#ifdef CONFIG_PROJECT_I9031
+static void set_charger_status(bool status)
+{
+	charger_present_flag = status;
+}
+
+bool get_charger_status(void)
+{
+	printk("get_charger_status=%d\n",charger_present_flag);
+	return charger_present_flag;
+}
+#endif
+//}
+
 #define CHGR_STS			0x0E
 #define BATT_LESS_THAN_2V		BIT(4)
 #define CHG_HOLD_OFF_BIT		BIT(3)
@@ -925,9 +1221,15 @@ static int get_prop_batt_status(struct smbchg_chip *chip)
 	int rc, status = POWER_SUPPLY_STATUS_DISCHARGING;
 	u8 reg = 0, chg_type;
 	bool charger_present, chg_inhibit;
+	int soc = 0;
 
 	charger_present = is_usb_present(chip) | is_dc_present(chip) |
 			  chip->hvdcp_3_det_ignore_uv;
+//{ Added by LiZidong
+#ifdef CONFIG_PROJECT_I9031
+	set_charger_status(charger_present);
+#endif
+//}
 	if (!charger_present)
 		return POWER_SUPPLY_STATUS_DISCHARGING;
 
@@ -937,8 +1239,19 @@ static int get_prop_batt_status(struct smbchg_chip *chip)
 		return POWER_SUPPLY_STATUS_UNKNOWN;
 	}
 
-	if (reg & BAT_TCC_REACHED_BIT)
-		return POWER_SUPPLY_STATUS_FULL;
+	if (reg & BAT_TCC_REACHED_BIT){
+		// pony.ma, DATE20161125, JCABCNA-197 diff display when normal and warm full charger, DATE20161125-01 START
+		soc = get_prop_batt_capacity(chip);
+		if(soc == 100){
+			pr_smb(PR_STATUS, "POWER_SUPPLY_STATUS_FULL\n");
+			return POWER_SUPPLY_STATUS_FULL;
+		}
+		else{
+			pr_smb(PR_STATUS, "POWER_SUPPLY_STATUS_NOT_CHARGING\n");
+			return POWER_SUPPLY_STATUS_NOT_CHARGING;
+		}
+		// pony.ma, DATE20161125-01 END
+	}
 
 	chg_inhibit = reg & CHG_INHIBIT_BIT;
 	if (chg_inhibit)
@@ -1115,7 +1428,7 @@ static int get_prop_batt_resistance_id(struct smbchg_chip *chip)
 	}
 	return rbatt;
 }
-
+/*
 #define DEFAULT_BATT_FULL_CHG_CAPACITY	0
 static int get_prop_batt_full_charge(struct smbchg_chip *chip)
 {
@@ -1128,7 +1441,7 @@ static int get_prop_batt_full_charge(struct smbchg_chip *chip)
 	}
 	return bfc;
 }
-
+*/
 #define DEFAULT_BATT_VOLTAGE_NOW	0
 static int get_prop_batt_voltage_now(struct smbchg_chip *chip)
 {
@@ -1601,6 +1914,8 @@ static int smbchg_set_high_usb_chg_current(struct smbchg_chip *chip,
 	int i, rc;
 	u8 usb_cur_val;
 
+	pr_smb(PR_STATUS, "current_ma set to %d\n",current_ma);
+
 	if (current_ma == CURRENT_100_MA) {
 		rc = smbchg_sec_masked_write(chip,
 					chip->usb_chgpth_base + CHGPTH_CFG,
@@ -1646,6 +1961,7 @@ static int smbchg_set_high_usb_chg_current(struct smbchg_chip *chip,
 	}
 
 	usb_cur_val = i & USBIN_INPUT_MASK;
+	pr_smb(PR_STATUS, "set ilim:0x%02x\n", usb_cur_val);
 	rc = smbchg_sec_masked_write(chip, chip->usb_chgpth_base + IL_CFG,
 				USBIN_INPUT_MASK, usb_cur_val);
 	if (rc < 0) {
@@ -1900,6 +2216,7 @@ static int smbchg_set_fastchg_current_raw(struct smbchg_chip *chip,
 			"Cannot find %dma current_table using %d\n",
 			current_ma, CURRENT_500_MA);
 
+		pr_smb(PR_STATUS, "set fcc1:0x%02x\n", FCC_500MA_VAL);
 		rc = smbchg_sec_masked_write(chip, chip->chgr_base + FCC_CFG,
 					FCC_MASK,
 					FCC_500MA_VAL);
@@ -1918,6 +2235,7 @@ static int smbchg_set_fastchg_current_raw(struct smbchg_chip *chip,
 	}
 
 	cur_val = i & FCC_MASK;
+	pr_smb(PR_STATUS, "set fcc2:0x%02x\n", cur_val);
 	rc = smbchg_sec_masked_write(chip, chip->chgr_base + FCC_CFG,
 				FCC_MASK, cur_val);
 	if (rc < 0) {
@@ -2309,8 +2627,21 @@ static void smbchg_parallel_usb_enable(struct smbchg_chip *chip,
 		pr_err("no voters for fcc, skip it\n");
 		return;
 	}
-	parallel_chg_fcc_percent = 100 - smbchg_main_chg_fcc_percent;
-	target_parallel_fcc_ma = (fcc_ma * parallel_chg_fcc_percent) / 100;
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    if(fcc_ma == 3300) {
+        target_parallel_fcc_ma = 1800;
+    } else {
+	    parallel_chg_fcc_percent =
+		    100 - smbchg_main_chg_fcc_percent;
+	    target_parallel_fcc_ma =
+		    (fcc_ma * parallel_chg_fcc_percent) / 100;
+    }
+#else
+	    parallel_chg_fcc_percent =
+		    100 - smbchg_main_chg_fcc_percent;
+	    target_parallel_fcc_ma =
+		    (fcc_ma * parallel_chg_fcc_percent) / 100;
+#endif
 	pval.intval = target_parallel_fcc_ma * 1000;
 	parallel_psy->set_property(parallel_psy,
 			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX, &pval);
@@ -3822,14 +4153,35 @@ static int smbchg_config_chg_battery_type(struct smbchg_chip *chip)
 	if (chip->battery_type && !strcmp(prop.strval, chip->battery_type))
 		return 0;
 
+	// pony.ma, DATE20171009, ID usb wk battery model, DATE20171009-01 START
+	#ifdef FEATURE_REQS_UNIFY
+	if(is_Asia_area_id_bat){
+		batt_node = of_parse_phandle(node, "qcom,battery-data-1", 0);
+		if (!batt_node) {
+			batt_node = of_parse_phandle(node, "qcom,battery-data", 0);
+		}
+	}
+	else
+		batt_node = of_parse_phandle(node, "qcom,battery-data", 0);
+	pr_info("pony1009:node->name=%s,batt_node->name=%s\n", node->name,batt_node->name);	
+	#else
 	batt_node = of_parse_phandle(node, "qcom,battery-data", 0);
+	pr_info("pony-1009:node->name=%s,batt_node->name=%s\n", node->name,batt_node->name);	
+	#endif	
+	// pony.ma, DATE20171009-01 END
+	
 	if (!batt_node) {
 		pr_smb(PR_MISC, "No batterydata available\n");
 		return 0;
 	}
-
+	
+#ifdef CONFIG_TINNO_NO_BATID
+	profile_node = of_batterydata_get_best_profile(batt_node,
+							"bms", Tinno_battery_name);
+#else
 	profile_node = of_batterydata_get_best_profile(batt_node,
 							"bms", NULL);
+#endif
 	if (!profile_node) {
 		pr_err("couldn't find profile handle\n");
 		return -EINVAL;
@@ -4024,6 +4376,7 @@ struct regulator_ops smbchg_otg_reg_ops = {
 #define USBIN_ADAPTER_9V		0x3
 #define USBIN_ADAPTER_5V_9V_CONT	0x2
 #define USBIN_ADAPTER_5V_UNREGULATED_9V	0x5
+#define USBIN_ADAPTER_5V		0x0
 static int smbchg_external_otg_regulator_enable(struct regulator_dev *rdev)
 {
 	int rc = 0;
@@ -4890,12 +5243,48 @@ static int smbchg_restricted_charging(struct smbchg_chip *chip, bool enable)
 	return rc;
 }
 
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+static int smbchg_charge_speed_restore(struct smbchg_chip *chip);
+#endif
+
+// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 START
+static int smbchg_get_input_voltage(struct smbchg_chip *chip)
+{
+	int rc;
+	struct qpnp_vadc_result adc_result;
+	
+	if (IS_ERR_OR_NULL(chip->vadc_dev)) 
+		return 1;	
+
+	rc = qpnp_vadc_read(chip->vadc_dev, USBIN, &adc_result);
+	if (rc) 
+		pr_smb(PR_STATUS, "error USBIN read rc = %d\n", rc);		
+	pr_info("USB_INPUT_VOLTAGE_NOW = %lld \n",adc_result.physical );       //uv	
+
+	pr_smb(PR_MISC, "reschedule input voltage work\n");
+	cancel_delayed_work(&chip->get_input_voltage_work);
+	schedule_delayed_work(&chip->get_input_voltage_work,
+              msecs_to_jiffies(SMBCHG_GET_INPUT_VOLTAGE_DELAY_MS));
+	return 0;
+}
+// pony.ma, DATE20171214-01 END
+
 static void handle_usb_removal(struct smbchg_chip *chip)
 {
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	int rc;
 
+	// pony.ma, DATE20180102, support slow insert usb charge, DATE20180102-01 LINE
+	rerun_count = 0;
+
+//caizhifu add start for tinno battery info update for debug,2016-11-29
+#ifdef CONFIG_TINNO_BATTERY_FG_HEART
+	printk("vbus remove triggered\n");
+#else
 	pr_smb(PR_STATUS, "triggered\n");
+#endif
+//caizhifu add end for tinno battery info update for debug,2016-11-29
+
 	smbchg_aicl_deglitch_wa_check(chip);
 	/* Clear the OV detected status set before */
 	if (chip->usb_ov_det)
@@ -4905,6 +5294,14 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 		chip->typec_current_ma = 0;
 	/* cancel/wait for hvdcp pending work if any */
 	cancel_delayed_work_sync(&chip->hvdcp_det_work);
+	
+	// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC
+	cancel_delayed_work(&chip->fastchg_temp_control_work);
+	smbchg_relax(chip, PM_FCC_TEMP);
+	#endif
+	// pony.ma, DATE20161114-01 END
+	
 	smbchg_relax(chip, PM_DETECT_HVDCP);
 	smbchg_change_usb_supply_type(chip, POWER_SUPPLY_TYPE_UNKNOWN);
 
@@ -4949,6 +5346,13 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 		HVDCP_SHORT_DEGLITCH_VOTER, false, 0);
 	if (!chip->hvdcp_not_supported)
 		restore_from_hvdcp_detection(chip);
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    //restore charge speed when charger is removed.
+    smbchg_charge_speed_restore(chip);
+#endif
+
+	// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 LINE
+	cancel_delayed_work(&chip->get_input_voltage_work);
 }
 
 static bool is_usbin_uv_high(struct smbchg_chip *chip)
@@ -4971,15 +5375,33 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 	int rc;
 	char *usb_type_name = "null";
 
+	// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 LINE
+	smbchg_get_input_voltage(chip);
+	
 	pr_smb(PR_STATUS, "triggered\n");
 	/* usb inserted */
 	read_usb_type(chip, &usb_type_name, &usb_supply_type);
+
+//caizhifu add start for tinno battery info update for debug,2016-11-24
+#ifdef CONFIG_TINNO_BATTERY_FG_HEART
+	printk("vbus insert inserted type = %d (%s)", usb_supply_type, usb_type_name);
+#else
 	pr_smb(PR_STATUS,
 		"inserted type = %d (%s)", usb_supply_type, usb_type_name);
+#endif
+//caizhifu add end for tinno battery info update for debug,2016-11-24
 
 	smbchg_aicl_deglitch_wa_check(chip);
 	if (chip->typec_psy)
 		update_typec_status(chip);
+	
+	// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC
+	smbchg_stay_awake(chip, PM_FCC_TEMP);	
+	smbchg_set_fastchg_temp_current(chip);
+	#endif  /* CONFIG_TINNO_FCC */
+	// pony.ma, DATE20161114-01 END
+	
 	smbchg_change_usb_supply_type(chip, usb_supply_type);
 	if (!chip->skip_usb_notification) {
 		pr_smb(PR_MISC, "setting usb psy present = %d\n",
@@ -6023,6 +6445,7 @@ static int smbchg_get_iusb(struct smbchg_chip *chip)
 	return iusb_ua;
 }
 
+#define RERUN_APSD_COUNT     7
 static void smbchg_external_power_changed(struct power_supply *psy)
 {
 	struct smbchg_chip *chip = container_of(psy,
@@ -6071,9 +6494,29 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 	if (!rc && usb_supply_type == POWER_SUPPLY_TYPE_USB &&
 			prop.intval != POWER_SUPPLY_TYPE_USB &&
 			is_usb_present(chip)) {
+
+/*		//modified by zhengquan.qin,for floating charger case
+		if(usb_supply_type == POWER_SUPPLY_TYPE_USB && prop.intval == POWER_SUPPLY_TYPE_USB_DCP)
+		{
+			pr_smb(PR_STATUS,
+				"nonstartard charger detetced\n");				
+			goto  skip_rerun_apsd;
+			//break;
+		}
+*/
+
+		// pony.ma, DATE20180102, support slow insert usb charge, DATE20180102-01 START
+		rerun_count++;
+		pr_info("rerun_count=%d\n",rerun_count);
+		if(rerun_count > RERUN_APSD_COUNT){
+			pr_info("nonstartard charger detetced:rerun_count=%d\n",rerun_count);
+			goto  skip_rerun_apsd;
+		}
+		// pony.ma, DATE20180102-01 END
+		
 		/* incorrect type detected */
 		pr_smb(PR_MISC,
-			"Incorrect charger type detetced - rerun APSD\n");
+			"Incorrect charger type detetced - rerun APSD\n");		
 		chip->hvdcp_3_det_ignore_uv = true;
 		pr_smb(PR_MISC, "setting usb psy dp=f dm=f\n");
 		power_supply_set_dp_dm(chip->usb_psy,
@@ -6104,7 +6547,7 @@ static void smbchg_external_power_changed(struct power_supply *psy)
 			schedule_delayed_work(&chip->hvdcp_det_work,
 				msecs_to_jiffies(HVDCP_NOTIFY_MS));
 	}
-
+skip_rerun_apsd:
 	if (usb_supply_type != POWER_SUPPLY_TYPE_USB)
 		goto  skip_current_for_non_sdp;
 
@@ -6153,8 +6596,13 @@ static enum power_supply_property smbchg_battery_properties[] = {
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMITED,
 	POWER_SUPPLY_PROP_RERUN_AICL,
 	POWER_SUPPLY_PROP_RESTRICTED_CHARGING,
+	POWER_SUPPLY_PROP_BATT_VOL,
 	POWER_SUPPLY_PROP_ALLOW_HVDCP3,
 	POWER_SUPPLY_PROP_MAX_PULSE_ALLOWED,
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+	POWER_SUPPLY_PROP_CHARGE_SPEED,
+#endif
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN
 };
 
 static int smbchg_battery_set_property(struct power_supply *psy,
@@ -6238,6 +6686,11 @@ static int smbchg_battery_set_property(struct power_supply *psy,
 			power_supply_changed(&chip->batt_psy);
 		}
 		break;
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    case POWER_SUPPLY_PROP_CHARGE_SPEED:
+        rc = smbchg_charge_speed_set(chip, val->intval);
+        break;
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -6262,6 +6715,9 @@ static int smbchg_battery_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_RERUN_AICL:
 	case POWER_SUPPLY_PROP_RESTRICTED_CHARGING:
 	case POWER_SUPPLY_PROP_ALLOW_HVDCP3:
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    case POWER_SUPPLY_PROP_CHARGE_SPEED:
+#endif
 		rc = 1;
 		break;
 	default:
@@ -6279,7 +6735,25 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 				struct smbchg_chip, batt_psy);
 
 	switch (prop) {
+	case POWER_SUPPLY_PROP_BATT_VOL:
+		val->intval = get_prop_batt_voltage_now(chip)/1000;
+		break;
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    case POWER_SUPPLY_PROP_CHARGE_SPEED:
+        val->intval = chip->current_speed;
+        break;
+#endif
 	case POWER_SUPPLY_PROP_STATUS:
+        #if defined (CONFIG_TINNO_BATTERY_CMD_DEBUG)
+        if (g_battery_cmd_debug_mode)
+        {
+            if (0xffff != g_battery_cmd_debug_status)
+                val->intval = g_battery_cmd_debug_status;
+            else
+                val->intval = get_prop_batt_status(chip);
+        }
+        else
+        #endif  /* CONFIG_TINNO_BATTERY_CMD_DEBUG */
 		val->intval = get_prop_batt_status(chip);
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
@@ -6306,6 +6780,16 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 		val->intval = smbchg_get_prop_batt_current_max(chip);
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
+        #if defined (CONFIG_TINNO_BATTERY_CMD_DEBUG)
+        if (g_battery_cmd_debug_mode)
+        {
+            if (0xffff != g_battery_cmd_debug_health)
+                val->intval = g_battery_cmd_debug_health;
+            else
+                val->intval = get_prop_batt_health(chip);
+        }
+        else
+        #endif  /* CONFIG_TINNO_BATTERY_CMD_DEBUG */
 		val->intval = get_prop_batt_health(chip);
 		break;
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
@@ -6343,7 +6827,9 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 		val->intval = get_prop_batt_resistance_id(chip);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval = get_prop_batt_full_charge(chip);
+	//	val->intval = get_prop_batt_full_charge(chip);
+		// pony.ma, DATE20171221, correct show battery capacity, DATE20171221-01 LINE
+		val->intval = tinno_battery_capacity*1000; // mAh
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = get_prop_batt_temp(chip);
@@ -6381,6 +6867,11 @@ static int smbchg_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_MAX_PULSE_ALLOWED:
 		val->intval = chip->max_pulse_allowed;
 		break;
+	// pony.ma, DATE20171010, Define project battery capacity for 3rd apk, DATE20171010-01 START
+    case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = tinno_battery_capacity*1000; // mAh
+		break;
+	// pony.ma, DATE20171010-01 END
 	default:
 		return -EINVAL;
 	}
@@ -6517,35 +7008,214 @@ static irqreturn_t batt_cold_handler(int irq, void *_chip)
 	return IRQ_HANDLED;
 }
 
+// pony.ma, DATE20161114, optimize code, DATE20161114-01 START
+#ifdef CONFIG_TINNO_FCC_INTMODE
+static int smbchg_set_fastchg_temp_current_intmode(struct smbchg_chip *chip)
+{
+	int warm_temp = 0,cool_temp = 0;
+	int rc = 0;
+	int temp = 0;
+	
+	rc = get_property_from_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP,&cool_temp);
+	rc = get_property_from_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP,&warm_temp);
+	pr_smb(PR_INTERRUPT,"before changed jetia get cool = %d , warm = %d\n", cool_temp,warm_temp);
+
+	if (chip->batt_cool){
+		// pony.ma, DATE20170118, Adjust float compensate voltage for fake health, DATE20170118-01 LINE
+		smbchg_float_voltage_comp_set(chip,0);
+		if(cool_temp == chip->fastchg_temp_s1_bat_decidegc){
+			rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_low);
+			if (rc < 0)
+				pr_err("vote for s1 temp_current fail rc %d\n", rc);
+			pr_smb(PR_INTERRUPT, "set fastchg temp s1 current to %d\n",
+				chip->fastchg_temp_current_low);				
+			set_property_on_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP,
+				chip->fastchg_temp_min_bat_decidegc);
+			set_property_on_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP,
+				chip->fastchg_temp_s2_bat_decidegc);	
+			pr_smb(PR_INTERRUPT, "after changed jetia set set cool = %d, set warm = %d\n",
+				chip->fastchg_temp_min_bat_decidegc,chip->fastchg_temp_s2_bat_decidegc);
+			// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+			chip->fastchg_cool_status = false;
+			// pony.ma, DATE20170118,correct init status, DATE20170118-01 START
+			get_property_from_fg(chip, POWER_SUPPLY_PROP_TEMP, &temp);
+			if(temp == -22)
+				chip->fastchg_cool_status = true;
+			// pony.ma, DATE20170118-01 END
+			
+		}  //set 10 to 26
+		if(cool_temp == chip->fastchg_temp_min_bat_decidegc){
+			rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_low);
+			if (rc < 0)
+				pr_err("vote for s1 temp_current fail rc %d\n", rc);
+			pr_smb(PR_INTERRUPT, "set fastchg current to %d\n",
+				chip->fastchg_temp_current_low);
+			// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+			chip->fastchg_cool_status = true;
+		}  //set 10 to 26
+		// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+		pr_smb(PR_STATUS, "fastchg cool status : %d\n",	chip->fastchg_cool_status);
+	}
+	
+	if (chip->batt_warm){
+		if(warm_temp == chip->fastchg_temp_s2_bat_decidegc){
+			// pony.ma, DATE20170118, Adjust float compensate voltage for fake health, DATE20170118-01 LINE
+			smbchg_float_voltage_comp_set(chip,0);
+			rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_high);
+			if (rc < 0)
+				pr_err("vote for s2 temp_current fail rc %d\n", rc);
+			pr_smb(PR_INTERRUPT, "set fastchg temp s2 current to %d\n",
+				chip->fastchg_temp_current_high);	
+			set_property_on_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP,
+				chip->fastchg_temp_s1_bat_decidegc);
+			set_property_on_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP,
+				chip->fastchg_temp_max_bat_decidegc);	
+			pr_smb(PR_INTERRUPT, "after changed jetia set cool = %d, set warm = %d\n",
+				chip->fastchg_temp_s1_bat_decidegc,chip->fastchg_temp_max_bat_decidegc);
+			// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+			chip->fastchg_warm_status = false;
+		}  //set 25 to 45
+		if(warm_temp == chip->fastchg_temp_max_bat_decidegc){	
+			// pony.ma, DATE20170118, Adjust float compensate voltage for fake health, DATE20170118-01 LINE
+			smbchg_float_voltage_comp_set(chip,chip->float_voltage_comp);
+			rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_high);
+			if (rc < 0)
+				pr_err("vote for s2 temp_current fail rc %d\n", rc);
+			pr_smb(PR_INTERRUPT, "set fastchg temp s2 current to %d\n",
+				chip->fastchg_temp_current_high);
+			// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+			chip->fastchg_warm_status = true;
+		}  //set 25 to 45
+		// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+		pr_smb(PR_STATUS, "fastchg warm status : %d\n", chip->fastchg_warm_status);
+	}
+	return 0;
+}
+#endif  /* CONFIG_TINNO_FCC_INTMODE */
+// pony.ma, DATE20161114-01 END
+
 static irqreturn_t batt_warm_handler(int irq, void *_chip)
 {
 	struct smbchg_chip *chip = _chip;
 	u8 reg = 0;
+	
+	u8 fv_comp, fcc_comp;
+	int test_cool_temp, test_warm_temp, test_temp;
 
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_warm = !!(reg & HOT_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
 	smbchg_parallel_usb_check_ok(chip);
+	
+	// pony.ma, DATE20161114, optimize code, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC_INTMODE
+	if (chip->batt_warm){
+		smbchg_set_fastchg_temp_current_intmode(chip);
+		// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+		chip->batt_warm = chip->fastchg_warm_status;
+	}
+	#endif  /* CONFIG_TINNO_FCC_INTMODE */
+	// pony.ma, DATE20161114-01 END
+
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
 	set_property_on_fg(chip, POWER_SUPPLY_PROP_HEALTH,
 			get_prop_batt_health(chip));
+
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP, &test_cool_temp);
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP, &test_warm_temp);
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_TEMP, &test_temp);
+	smbchg_read(chip, &fv_comp, chip->chgr_base + FV_CMP_CFG, 1);
+	smbchg_read(chip, &fcc_comp, chip->chgr_base + FCC_CMP_CFG, 1);
+
+	pr_smb(PR_INTERRUPT, "fv_comp:0x%02x, fcc_comp:0x%02x\n", fv_comp, fcc_comp);
+	pr_smb(PR_INTERRUPT, "test_cool_temp=%d, test_warm_temp=%d, test_temp=%d\n", 
+		test_cool_temp, test_warm_temp, test_temp);
+	
 	return IRQ_HANDLED;
 }
 
+#ifdef TINNO_SPECIAL_TEMP_SETTING
+void Tinno_Set_Jeita_Vfloat_Compensation(int en,struct smbchg_chip *chip)
+{
+	static int en_status=-1;
+	int rc=0;
+	if(en_status==en)
+	{
+		printk(" no need to set Vfloat. %d %d \n",en_status,en);
+		return;
+	}
+	
+	if(en)
+	{
+		/* set the float voltage compensation */
+		if (chip->float_voltage_comp != -EINVAL) {
+			rc = smbchg_float_voltage_comp_set(chip,
+				chip->float_voltage_comp);
+			if (rc < 0) {
+				printk( "Couldn't set float voltage comp rc = %d\n",rc);
+				return ;
+			}
+			pr_smb(PR_STATUS, "set float voltage comp to %d\n",chip->float_voltage_comp);
+		}
+	}else{
+		rc = smbchg_float_voltage_comp_set(chip,0);
+		if (rc < 0) {
+			printk("Couldn't set float voltage comp rc = %d\n",rc);
+			return ;
+		}
+		pr_smb(PR_STATUS, "set float voltage comp to 0 \n");
+	}
+	en_status=en;
+}
+#endif
 static irqreturn_t batt_cool_handler(int irq, void *_chip)
 {
 	struct smbchg_chip *chip = _chip;
 	u8 reg = 0;
 
+	u8 fv_comp, fcc_comp;
+	int test_cool_temp, test_warm_temp, test_temp;
+
 	smbchg_read(chip, &reg, chip->bat_if_base + RT_STS, 1);
 	chip->batt_cool = !!(reg & COLD_BAT_SOFT_BIT);
 	pr_smb(PR_INTERRUPT, "triggered: 0x%02x\n", reg);
 	smbchg_parallel_usb_check_ok(chip);
+// pony.ma, DATE20170209, compatible other battery(v3967), DATE20170209-01 LINE
+#if defined(TINNO_SPECIAL_TEMP_SETTING) && !defined(CONFIG_TINNO_FCC_INTMODE)
+	if(chip->batt_cool)
+	{
+		Tinno_Set_Jeita_Vfloat_Compensation(0,chip);
+	}else{
+		Tinno_Set_Jeita_Vfloat_Compensation(1,chip);
+	}
+#endif
+
+	// pony.ma, DATE20161114, optimize code, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC_INTMODE
+	if(chip->batt_cool){
+		smbchg_set_fastchg_temp_current_intmode(chip);
+		// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+		chip->batt_cool = chip->fastchg_cool_status;
+	}
+	#endif  /* CONFIG_TINNO_FCC_INTMODE */
+	// pony.ma, DATE20161114-01 END
+	
 	if (chip->psy_registered)
 		power_supply_changed(&chip->batt_psy);
 	set_property_on_fg(chip, POWER_SUPPLY_PROP_HEALTH,
 			get_prop_batt_health(chip));
+
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_COOL_TEMP, &test_cool_temp);
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_WARM_TEMP, &test_warm_temp);
+	get_property_from_fg(chip, POWER_SUPPLY_PROP_TEMP, &test_temp);
+	smbchg_read(chip, &fv_comp, chip->chgr_base + FV_CMP_CFG, 1);
+	smbchg_read(chip, &fcc_comp, chip->chgr_base + FCC_CMP_CFG, 1);
+
+	pr_smb(PR_INTERRUPT, "fv_comp:0x%02x, fcc_comp:0x%02x\n", fv_comp,fcc_comp);
+	pr_smb(PR_INTERRUPT, "test_cool_temp=%d, test_warm_temp=%d, test_temp=%d\n", 
+		test_cool_temp, test_warm_temp, test_temp);
+	
 	return IRQ_HANDLED;
 }
 
@@ -6749,6 +7419,8 @@ static irqreturn_t usbin_ov_handler(int irq, void *_chip)
 		goto out;
 	}
 
+	pr_smb(PR_STATUS,"rt_sts = 0x%02x addr:0x%x\n",reg,chip->usb_chgpth_base + RT_STS);
+
 	/* OV condition is detected. Notify it to USB psy */
 	if (reg & USBIN_OV_BIT) {
 		chip->usb_ov_det = true;
@@ -6793,9 +7465,9 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 	}
 
 	pr_smb(PR_STATUS,
-		"%s chip->usb_present = %d rt_sts = 0x%02x hvdcp_3_det_ignore_uv = %d aicl = %d\n",
+		"%s chip->usb_present = %d rt_sts = 0x%02x addr:0x%x hvdcp_3_det_ignore_uv = %d aicl = %d\n",
 		chip->hvdcp_3_det_ignore_uv ? "Ignoring":"",
-		chip->usb_present, reg, chip->hvdcp_3_det_ignore_uv,
+		chip->usb_present, reg,chip->usb_chgpth_base + RT_STS, chip->hvdcp_3_det_ignore_uv,
 		aicl_level);
 
 	/*
@@ -6822,6 +7494,7 @@ static irqreturn_t usbin_uv_handler(int irq, void *_chip)
 		chip->very_weak_charger = true;
 		rc = smbchg_read(chip, &reg,
 				chip->usb_chgpth_base + ICL_STS_2_REG, 1);
+		pr_smb(PR_STATUS, "ICL_STS_2: 0x%02x, addr:0x%x\n", reg,chip->usb_chgpth_base + ICL_STS_2_REG);
 		if (rc) {
 			dev_err(chip->dev, "Could not read usb icl sts 2: %d\n",
 					rc);
@@ -7208,6 +7881,25 @@ static int smbchg_hw_init(struct smbchg_chip *chip)
 	int rc, i;
 	u8 reg, mask;
 
+    // Jake.L, DATE20161101, case 02671217, Disable HVDCP , DATE20161101-01 START
+    if (g_do_not_support_qc)
+        chip->hvdcp_not_supported = true;
+    pr_smb(PR_STATUS, "g_do_not_support_qc=%d, hvdcp_not_supported=%d\n", g_do_not_support_qc, chip->hvdcp_not_supported);
+    // Jake.L, DATE20161101-01 END
+
+	// pony.ma, DATE20170828, set USBIN_ADAPTER_5V only, DATE20170828-01 START
+	if (chip->hvdcp_not_supported){
+		rc = smbchg_sec_masked_write(chip,
+			chip->usb_chgpth_base + USBIN_CHGR_CFG,
+			ADAPTER_ALLOWANCE_MASK, USBIN_ADAPTER_5V);
+		if (rc < 0)
+			pr_err("Couldn't write usb allowance to USBIN_5V_OV_SEL rc=%d\n", rc);
+	
+		rc = smbchg_read(chip, &reg, chip->usb_chgpth_base + USBIN_CHGR_CFG, 1);
+		pr_smb(PR_STATUS,"pony: OV_SEL = 0x%02x addr:0x%x \n",reg,chip->usb_chgpth_base + USBIN_CHGR_CFG);
+	}
+	// pony.ma, DATE20170828-01 END
+	
 	rc = smbchg_read(chip, chip->revision,
 			chip->misc_base + REVISION1_REG, 4);
 	if (rc < 0) {
@@ -7790,6 +8482,21 @@ static int smb_parse_dt(struct smbchg_chip *chip)
 			rc, 1);
 	OF_PROP_READ(chip, chip->fastchg_current_comp, "fastchg-current-comp",
 			rc, 1);
+	//BEGIN<REQ><><DEFUALT USB DCP ICL SET TO 1400MA><20160708>huiyong.yin
+       OF_PROP_READ(chip, chip->no_parallel_defualt_dcp_icl_ma, "no-parallel-defualt-dcp-icl-ma",
+                       rc, 1);
+        if (chip->no_parallel_defualt_dcp_icl_ma != -EINVAL){
+               printk( "no_parallel_defualt_dcp_icl_ma mA = %d\n",
+                chip->no_parallel_defualt_dcp_icl_ma);
+              smbchg_default_dcp_icl_ma = chip->no_parallel_defualt_dcp_icl_ma;
+        }
+       //END<REQ><><DEFUALT USB DCP ICL SET TO 1400MA><20160708>huiyong.yin
+	
+       // pony.ma, DATE20171010, Define project battery capacity for 3rd apk, DATE20171010-01 START
+       OF_PROP_READ(chip, tinno_battery_capacity, "tinno-battery-capacity",
+                       rc, 1);
+       // pony.ma, DATE20171010-01 END       
+	   
 	OF_PROP_READ(chip, chip->float_voltage_comp, "float-voltage-comp",
 			rc, 1);
 	if (chip->safety_time != -EINVAL &&
@@ -7864,6 +8571,11 @@ static int smb_parse_dt(struct smbchg_chip *chip)
 					"qcom,force-aicl-rerun");
 	chip->skip_usb_suspend_for_fake_battery = of_property_read_bool(node,
 				"qcom,skip-usb-suspend-for-fake-battery");
+	
+	g_do_not_support_qc = of_property_read_bool(node,
+				"qcom,no_support_qc");//LINE<20160720><don't support qc>wangyanhui
+				
+	//pr_info("wangyanhui    g_do_not_support_qc = %d \n ", g_do_not_support_qc);
 
 	/* parse the battery missing detection pin source */
 	rc = of_property_read_string(chip->spmi->dev.of_node,
@@ -8267,6 +8979,295 @@ static void dump_regs(struct smbchg_chip *chip)
 		dump_reg(chip, chip->misc_base + addr, "MISC CFG");
 }
 
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+static int smbchg_set_hvdcp_speed(struct smbchg_chip *chip)
+{
+    int cur_total_fcc_ma = get_effective_result_locked(chip->fcc_votable);
+    int target_fcc_ma = 0;
+	int rc = 0;
+    int charge_type = POWER_SUPPLY_TYPE_UNKNOWN;
+    int parallel_fcc_ma = 0;
+    struct power_supply *parallel_psy = get_parallel_psy(chip);
+    union power_supply_propval pval = {0, };
+
+	if (parallel_psy != NULL) {//get parallel charger fcc, debug output only.
+        parallel_psy->get_property(parallel_psy,
+                POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX, &pval);
+        parallel_fcc_ma = pval.intval / 1000;
+	}
+
+    pr_smb(PR_STATUS, "FCC = %d[%d, %d] usb present: %d\n",
+        cur_total_fcc_ma, chip->fastchg_current_ma, parallel_fcc_ma, chip->usb_present);
+
+    //check charger existance.
+    if(chip->usb_present) {
+        //reset restoration flag.
+        chip->speed_restoring = false;
+
+        //check charger type, only hvdcp charger will be handled.
+        pr_smb(PR_STATUS, "current usb type: %d\n", chip->usb_supply_type);
+        if(chip->usb_supply_type != POWER_SUPPLY_TYPE_USB_HVDCP
+            && chip->usb_supply_type != POWER_SUPPLY_TYPE_USB_HVDCP_3
+            && chip->usb_supply_type != POWER_SUPPLY_TYPE_USB_DCP) {
+            pr_smb(PR_STATUS, "Not hvdcp/dcp charger, skipping\n");
+            return rc;
+        }
+
+        //check charging type, only CC will be handled.
+        charge_type = get_prop_charge_type(chip);
+        if (charge_type != POWER_SUPPLY_CHARGE_TYPE_FAST) {
+            pr_smb(PR_STATUS, "Not in fast charge(%d), skipping\n", charge_type);
+            return rc;
+        }
+    } else {
+        //only speed restoration is allowed to set FCC current without a charger connected.
+        if(chip->speed_restoring) {
+            chip->speed_restoring = false;//reset flag.
+        }else {
+            pr_smb(PR_STATUS, "Not restoration, no charger, skipping\n");
+            return rc;
+        }
+    }
+
+    target_fcc_ma = chip->speed_current_map[chip->target_speed];
+    if(target_fcc_ma != cur_total_fcc_ma) {
+        chip->current_speed = chip->target_speed;
+        pr_smb(PR_STATUS, "set fastchg current(total) to %d\n", target_fcc_ma);
+        smbchg_set_fastchg_current_user(chip, target_fcc_ma);
+    }
+
+	return rc;
+}
+
+static void smbchg_smart_charging_control_work(struct work_struct *work)
+{
+	struct smbchg_chip *chip =
+		container_of(work, struct smbchg_chip,
+				smart_charging_control_work.work);
+
+	FUNC_ENTER();
+
+    smbchg_set_hvdcp_speed(chip);
+}
+
+static int smbchg_charge_speed_set(struct smbchg_chip *chip, int speed)
+{
+    int target_speed = speed;
+
+    if(target_speed >= SPEED_MAX) {
+        pr_smb(PR_STATUS, "INVALID speed: %d, reset to default\n", target_speed);
+        target_speed = SPEED_0;
+    }
+
+    pr_smb(PR_STATUS, "current speed: %d target: %d\n", chip->current_speed, target_speed);
+    if(target_speed != chip->current_speed) {
+        chip->target_speed = target_speed;
+        cancel_delayed_work(&chip->smart_charging_control_work);
+        schedule_delayed_work(&chip->smart_charging_control_work,
+                msecs_to_jiffies(SMBCHG_SMART_CHARGING_CONTROL_DELAY_MS));
+    }
+
+    return 0;
+}
+
+static int smbchg_charge_speed_restore(struct smbchg_chip *chip)
+{
+    int restore_speed = SPEED_0;//default speed to restore. 100%.
+
+    pr_smb(PR_STATUS, "current speed: %d target: %d\n", chip->current_speed, chip->target_speed);
+    if(chip->current_speed != restore_speed) {
+        chip->target_speed = restore_speed;
+        chip->speed_restoring = true;
+        cancel_delayed_work(&chip->smart_charging_control_work);
+        schedule_delayed_work(&chip->smart_charging_control_work,
+                msecs_to_jiffies(SMBCHG_SMART_CHARGING_CONTROL_RESTORE_MS));
+    }
+
+    return 0;
+}
+
+
+static int smbchg_init_speed_current_map(struct smbchg_chip *chip)
+{
+    int i = 0;
+    int rc = 0;
+    bool use_dt_settings = false;
+
+    if (of_find_property(chip->dev->of_node, SPEED_CURRENT_PROP, NULL)) {
+		rc = of_property_read_u32_array(chip->dev->of_node, SPEED_CURRENT_PROP, chip->speed_current_map, SPEED_MAX);
+		if (rc) {
+            dev_err(chip->dev,
+				"Couldn't read speed-current rc = %d\n", rc);
+		} else {
+		    use_dt_settings = true;
+		}
+    }
+
+    //use default settings if property is not found in device tree.
+    if(!use_dt_settings) {
+        chip->speed_current_map[0] = chip->cfg_fastchg_current_ma;
+        chip->speed_current_map[1] = 3000;
+        chip->speed_current_map[2] = 2700;
+        chip->speed_current_map[3] = 2300;
+        chip->speed_current_map[4] = 2000;
+        chip->speed_current_map[5] = 1500;
+        chip->speed_current_map[6] = 1200;
+        chip->speed_current_map[7] = 900;
+        chip->speed_current_map[8] = 600;
+        chip->speed_current_map[9] = 0;
+    }
+
+    for(; i < SPEED_MAX; i++) {
+        pr_smb(PR_STATUS, "speed current map[%d] : %d\n", i, chip->speed_current_map[i]);
+    }
+
+	return 0;
+}
+#endif
+
+// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+#ifdef CONFIG_TINNO_FCC
+static int smbchg_set_fastchg_temp_current(struct smbchg_chip *chip)
+{
+	int temp = 0;
+	int rc = 0;
+	temp = get_prop_batt_temp(chip);
+	pr_smb(PR_MISC,	"temp = %d\n",temp);
+    	if (chip->fastchg_temp_initial){
+			if(chip->enable_cool_fastchg_current_comp)
+			{
+				if(temp <= chip->fastchg_temp_min_bat_decidegc)
+				{
+					/* set the fast charge current compensation */
+					if (chip->fastchg_current_comp != -EINVAL) {
+						rc = smbchg_fastchg_current_comp_set(chip,
+							chip->fastchg_current_comp_low);
+						if (rc < 0) {
+							dev_err(chip->dev, "Couldn't set fastchg current comp rc = %d\n",
+								rc);
+							return rc;
+						}
+						pr_smb(PR_STATUS, "set fastchg current comp to %d\n",
+							chip->fastchg_current_comp_low);
+					}
+				
+				}
+				else
+				{
+					/* set the fast charge current compensation */
+					if (chip->fastchg_current_comp != -EINVAL) {
+						rc = smbchg_fastchg_current_comp_set(chip,
+							chip->fastchg_current_comp);
+						if (rc < 0) {
+							dev_err(chip->dev, "Couldn't set fastchg current comp rc = %d\n",
+								rc);
+							return rc;
+						}
+						pr_smb(PR_STATUS, "set fastchg current comp to %d\n",
+							chip->fastchg_current_comp);
+					}	
+				
+				}
+			}
+			
+		if( (temp > chip->fastchg_temp_min_bat_decidegc) && (temp < chip->fastchg_temp_max_bat_decidegc) ){
+			if((temp > chip->fastchg_temp_min_bat_decidegc) && (temp < chip->fastchg_temp_s1_bat_decidegc)){
+				rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_low);
+				pr_smb(PR_MISC,	"s1temp = %d,warm = %d,cool = %d,s1 temp_current = %d, s2 temp_current= %d \n",
+					chip->fastchg_temp_s1_bat_decidegc,chip->fastchg_temp_max_bat_decidegc,
+					chip->fastchg_temp_min_bat_decidegc,chip->fastchg_temp_current_low,chip->fastchg_temp_current_high);
+				if (rc < 0) {
+					pr_smb(PR_MISC,	"rc = %d\n",rc);
+					dev_err(chip->dev,
+						"Couldn't vote for s1 temp current rc=%d\n", rc);
+						return rc;
+				}							
+			}
+			else{
+				rc = vote(chip->fcc_votable, BATT_NORTEMP_FCC_VOTER, true,	chip->fastchg_temp_current_high);
+				pr_smb(PR_MISC,	"s1temp = %d,warm = %d,cool = %d,s1 temp_current = %d, s2 temp_current= %d \n",
+					chip->fastchg_temp_s1_bat_decidegc,chip->fastchg_temp_max_bat_decidegc,
+					chip->fastchg_temp_min_bat_decidegc,chip->fastchg_temp_current_low,chip->fastchg_temp_current_high);
+				if (rc < 0) {
+					pr_smb(PR_MISC,	"rc = %d\n",rc);
+					dev_err(chip->dev,
+						"Couldn't vote for s2 temp current rc=%d\n", rc);
+						return rc;
+				}					
+			}
+		}
+   	}
+	pr_smb(PR_STATUS, "reschedule fcc work\n");
+	cancel_delayed_work(&chip->fastchg_temp_control_work);
+	schedule_delayed_work(&chip->fastchg_temp_control_work,
+              msecs_to_jiffies(SMBCHG_TEMP_CONTROL_DELAY_MS));
+	return 0;
+}
+static void smbchg_fastchg_temp_control_work(struct work_struct *work)
+{
+	struct smbchg_chip *chip =
+		container_of(work, struct smbchg_chip,
+				fastchg_temp_control_work.work);
+	FUNC_ENTER();
+      smbchg_set_fastchg_temp_current(chip);
+}
+static int smbchg_init_fastchg_temp(struct smbchg_chip *chip)
+{
+	int rc = 0;
+	struct device_node *node = chip->dev->of_node;
+	
+	chip->enable_cool_fastchg_current_comp = of_property_read_bool(node,
+					"qcom,enable-cool-fastchg-current-comp");
+	OF_PROP_READ(chip, chip->fastchg_current_comp_low, "fastchg-current-comp-low", rc, 1);	
+	
+    	OF_PROP_READ(chip, chip->fastchg_temp_min_bat_decidegc, "fastchg-temp-min-bat-decidegc",	rc, 1);
+    	OF_PROP_READ(chip, chip->fastchg_temp_s1_bat_decidegc, "fastchg-temp-s1-bat-decidegc",	rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_max_bat_decidegc, "fastchg-temp-max-bat-decidegc",rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_current_low, "fastchg-temp-current-low",rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_current_high, "fastchg-temp-current-high", rc, 1);
+	pr_smb(PR_MISC,	"nortemp = %d,warm = %d,cool = %d,s1 temp current = %d,s2 temp current = %d \n",
+		chip->fastchg_temp_s1_bat_decidegc,chip->fastchg_temp_max_bat_decidegc,
+		chip->fastchg_temp_min_bat_decidegc,chip->fastchg_temp_current_high,chip->fastchg_temp_current_low);
+	
+  	chip->fastchg_temp_initial = true;
+	return 0;
+}
+#endif  /* CONFIG_TINNO_FCC */
+// pony.ma, DATE20161114-01 END
+
+// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+#ifdef CONFIG_TINNO_FCC_INTMODE
+static int smbchg_init_fastchg_temp_intmode(struct smbchg_chip *chip)
+{
+	int rc = 0;
+	
+    	OF_PROP_READ(chip, chip->fastchg_temp_min_bat_decidegc, "fastchg-temp-min-bat-decidegc",	rc, 1);	
+    	OF_PROP_READ(chip, chip->fastchg_temp_s1_bat_decidegc, "fastchg-temp-s1-bat-decidegc",rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_s2_bat_decidegc, "fastchg-temp-s2-bat-decidegc", rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_max_bat_decidegc, "fastchg-temp-max-bat-decidegc",rc, 1);
+    	OF_PROP_READ(chip, chip->fastchg_temp_current_low, "fastchg-temp-current-low",rc, 1);
+	OF_PROP_READ(chip, chip->fastchg_temp_current_high, "fastchg-temp-current-high", rc, 1);
+	pr_smb(PR_MISC,	"tempmin = %d,temps1 = %d,temps2 = %d, tempmax = %d,s1 temp current = %d,s2 temp current = %d \n",
+		chip->fastchg_temp_min_bat_decidegc,chip->fastchg_temp_s1_bat_decidegc,	chip->fastchg_temp_s2_bat_decidegc,
+		chip->fastchg_temp_max_bat_decidegc,chip->fastchg_temp_current_low,chip->fastchg_temp_current_high);
+	// pony.ma, DATE20161123, JCABCNA-267:solve mistake notice APP health, DATE20161123-01 LINE
+	chip->fastchg_warm_status = false;
+	chip->fastchg_cool_status = false;
+  	return 0;
+}
+#endif  /* CONFIG_TINNO_FCC_INTMODE */
+// pony.ma, DATE20161114-01 END
+
+// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 START
+static void smbchg_get_input_voltage_work(struct work_struct *work)
+{
+	struct smbchg_chip *chip =
+		container_of(work, struct smbchg_chip,
+				get_input_voltage_work.work);
+      smbchg_get_input_voltage(chip);
+}
+// pony.ma, DATE20171214-01 END
+
 static int create_debugfs_entries(struct smbchg_chip *chip)
 {
 	struct dentry *ent;
@@ -8421,6 +9422,9 @@ static int smbchg_probe(struct spmi_device *spmi)
 	struct qpnp_vadc_chip *vadc_dev = NULL, *vchg_vadc_dev = NULL;
 	const char *typec_psy_name;
 
+#ifdef CONFIG_TINNO_KE_LOG_CTRL
+	open_charger_debug_log();
+#endif
 	usb_psy = power_supply_get_by_name("usb");
 	if (!usb_psy) {
 		pr_smb(PR_STATUS, "USB supply not found, deferring probe\n");
@@ -8455,6 +9459,19 @@ static int smbchg_probe(struct spmi_device *spmi)
 			return rc;
 		}
 	}
+	
+	// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 START
+	if (of_find_property(spmi->dev.of_node, "qcom,usbin-vadc", NULL)) {
+		vadc_dev = qpnp_get_vadc(&spmi->dev, "usbin");
+		if (IS_ERR(vadc_dev)) {
+			rc = PTR_ERR(vadc_dev);
+			if (rc != -EPROBE_DEFER)
+				dev_err(&spmi->dev, "Couldn't get vadc rc=%d\n",
+						rc);
+			return rc;
+		}
+	}
+	// pony.ma, DATE20171214-01 END
 
 	if (of_find_property(spmi->dev.of_node, "qcom,vchg_sns-vadc", NULL)) {
 		vchg_vadc_dev = qpnp_get_vadc(&spmi->dev, "vchg_sns");
@@ -8561,6 +9578,17 @@ static int smbchg_probe(struct spmi_device *spmi)
 			smbchg_parallel_usb_en_work);
 	INIT_DELAYED_WORK(&chip->vfloat_adjust_work, smbchg_vfloat_adjust_work);
 	INIT_DELAYED_WORK(&chip->hvdcp_det_work, smbchg_hvdcp_det_work);
+	
+// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+#ifdef CONFIG_TINNO_FCC
+    chip->fastchg_temp_initial = false;
+    INIT_DELAYED_WORK(&chip->fastchg_temp_control_work, smbchg_fastchg_temp_control_work);     
+#endif  /* CONFIG_TINNO_FCC */
+// pony.ma, DATE20161114-01 END
+
+	// pony.ma, DATE20171214, add input voltage log, DATE20171214-01 LINE
+	INIT_DELAYED_WORK(&chip->get_input_voltage_work, smbchg_get_input_voltage_work);     
+
 	init_completion(&chip->src_det_lowered);
 	init_completion(&chip->src_det_raised);
 	init_completion(&chip->usbin_uv_lowered);
@@ -8617,6 +9645,18 @@ static int smbchg_probe(struct spmi_device *spmi)
 			"Unable to intialize hardware rc = %d\n", rc);
 		goto out;
 	}
+	
+	// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC_INTMODE
+	smbchg_init_fastchg_temp_intmode(chip);
+	#endif  /* CONFIG_TINNO_FCC_INTMODE */
+	// pony.ma, DATE20161114-01 END
+
+	// pony.ma, DATE20171009, ID usb wk battery model, DATE20171009-01 START
+	#ifdef FEATURE_REQS_UNIFY
+       Tinno_Get_Market_Area_is_Asia();
+	#endif
+	// pony.ma, DATE20171009-01 END
 
 	rc = determine_initial_status(chip);
 	if (rc < 0) {
@@ -8698,6 +9738,26 @@ static int smbchg_probe(struct spmi_device *spmi)
 	update_usb_status(chip, is_usb_present(chip), false);
 	dump_regs(chip);
 	create_debugfs_entries(chip);
+#ifdef ENABLE_SMART_CHARGING_CONTROL
+    chip->current_speed = SPEED_0;
+    chip->target_speed = SPEED_0;
+    chip->speed_restoring = false;
+    smbchg_init_speed_current_map(chip);
+    INIT_DELAYED_WORK(&chip->smart_charging_control_work, smbchg_smart_charging_control_work);
+#endif
+
+	// pony.ma, DATE20161114, optimize name, DATE20161114-01 START
+	#ifdef CONFIG_TINNO_FCC
+	smbchg_init_fastchg_temp(chip);
+	#endif  /* CONFIG_TINNO_FCC */
+	// pony.ma, DATE20161114-01 END
+
+    #if defined (CONFIG_TINNO_BATTERY_CMD_DEBUG)
+    // Initialize variable and create node /proc/tinno_battery_cmd/battery_cmd
+    g_battery_cmd_chg_chip = chip;
+    smbchg_battery_debug_init();
+    #endif  /* CONFIG_TINNO_BATTERY_CMD_DEBUG */
+	
 	dev_info(chip->dev,
 		"SMBCHG successfully probe Charger version=%s Revision DIG:%d.%d ANA:%d.%d batt=%d dc=%d usb=%d\n",
 			version_str[chip->schg_version],

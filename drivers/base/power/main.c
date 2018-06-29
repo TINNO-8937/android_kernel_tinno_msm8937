@@ -203,7 +203,12 @@ void device_pm_move_last(struct device *dev)
 static ktime_t initcall_debug_start(struct device *dev)
 {
 	ktime_t calltime = ktime_set(0, 0);
-
+// TINNO BEGIN
+// Added by cyong on Feb.8 , 2017 for statistical suspend and resume time
+#ifdef CONFIG_TINNO_KE_DBUG
+	calltime = ktime_get();
+#endif
+// TINNO END
 	if (pm_print_times_enabled) {
 		pr_info("calling  %s+ @ %i, parent: %s\n",
 			dev_name(dev), task_pid_nr(current),
@@ -219,10 +224,28 @@ static void initcall_debug_report(struct device *dev, ktime_t calltime,
 {
 	ktime_t rettime;
 	s64 nsecs;
-
+// TINNO BEGIN
+// Added by cyong on Feb.8 , 2017 for statistical suspend and resume time
+#ifdef CONFIG_TINNO_KE_DBUG
+	s64 msecs;
+#endif
+// TINNO END
 	rettime = ktime_get();
 	nsecs = (s64) ktime_to_ns(ktime_sub(rettime, calltime));
-
+// TINNO BEGIN
+// Added by cyong on Feb.8 , 2017 for statistical suspend and resume time more than 50ms
+#ifdef CONFIG_TINNO_KE_DBUG
+	msecs = ((unsigned long long)nsecs/1000000);
+	if(pm_consume_debug && (msecs>50) && (state.event==PM_EVENT_SUSPEND||state.event==PM_EVENT_RESUME)){
+		if(state.event == PM_EVENT_SUSPEND)
+		    pr_info("PM: call suspend %s+ returned %d after %Ld msecs\n", dev_name(dev),
+			    error, msecs);
+		else
+		    pr_info("PM: call resume %s+ returned %d after %Ld msecs\n", dev_name(dev),
+			    error, msecs);
+	}
+#endif
+// TINNO END
 	if (pm_print_times_enabled) {
 		pr_info("call %s+ returned %d after %Ld usecs\n", dev_name(dev),
 			error, (unsigned long long)nsecs >> 10);

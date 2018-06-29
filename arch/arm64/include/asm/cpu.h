@@ -67,5 +67,7 @@ void __init cpuinfo_store_boot_cpu(void);
 void __init init_cpu_features(struct cpuinfo_arm64 *info);
 void update_cpu_features(int cpu, struct cpuinfo_arm64 *info,
 				 struct cpuinfo_arm64 *boot);
+ /* setup machine descriptor */
+void machine_desc_set(const char *str); //TINNO_SH_Jhyu IAAO-429 Adding HW version
 
 #endif /* __ASM_CPU_H */

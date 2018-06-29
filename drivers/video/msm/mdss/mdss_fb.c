@@ -275,6 +275,47 @@ static int mdss_fb_notify_update(struct msm_fb_data_type *mfd,
 
 static int lcd_backlight_registered;
 
+static u32 tinno_brightness = 0;   //tinno map backlight
+static bool tinno_is_asia_area =false;
+static int BRIGHT_MAP[256]={0,24,25,25,26,27,27,28,28,29,                 29,30,31,31,32,32,33,34,34,35,
+	                                   36,37,37,38,39,40,41,41,42,43,                44,45,46,47,48,49,50,51,52,53,
+	                                   54,55,56,57,58,59,61,62,63,64,                66,67,68,70,71,73,74,76,77,79,
+	                                   80,82,84,85,87,89,91,93,94,96,                98,100,102,105,107,109,111,113,116,118,
+	                                   120,123,125,128,130,133,136,139,141,144,       147,150,153,156,160,163,166,170,173,177,
+	                                   180,184,188,191,195,199,203,207,212,216,       220,225,229,234,239,244,249,254,259,264,
+	                                   270,275,281,286,292,298,304,310,317,323,       330,336,343,350,357,365,372,380,387,395,
+	                                   403,412,420,428,437,446,455,464,474,484,       493,503,514,524,535,546,557,568,580,591,
+	                                   604,616,628,641,654,668,681,695,709,724,       738,753,769,784,800,817,833,850,867,885,
+	                                   903,922,940,959,979,999,1019,1040,1061,1083,    1105,1127,1150,1174,1198,1222,1247,1272,1298,1325,
+	                                   1352,1379,1407,1436,1465,1495,1525,1556,1588,1620,1653,1687,1721,1756,1792,1829,1866,1904,1943,1982,
+	                                   2023,2064,2106,2149,2192,2237,2283,2329,2376,2425,2474,2525,2576,2628,2682,2736,2792,2849,2907,2966,
+	                                   3027,3088,3151,3215,3281,3348,3416,3485,3556,3629,3702,3778,3855,3933,4013,4095};
+
+#include <linux/tinno_project_info.h>
+static int tinno_market_area_is_asia(void)  //tinno map backlight
+{
+    char *market_area_name;
+        
+    market_area_name = tinno_get_market_area();
+
+    if (NULL != strstr(market_area_name, "_th_"))
+            tinno_is_asia_area = true;
+    else if  (NULL != strstr(market_area_name, "_vn_"))
+            tinno_is_asia_area = true;
+    else if  (NULL != strstr(market_area_name, "_id_"))
+            tinno_is_asia_area = true;
+    else if  (NULL != strstr(market_area_name, "_my_"))
+            tinno_is_asia_area = true;
+    else if  (NULL != strstr(market_area_name, "_as_"))
+            tinno_is_asia_area = true;
+    else
+            tinno_is_asia_area = false;
+
+    printk(KERN_INFO "tinno get market area :area = %s, tinno_is_asia_area = %d\n",market_area_name,tinno_is_asia_area);
+    return 0;
+    
+}
+
 static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 				      enum led_brightness value)
 {
@@ -291,8 +332,13 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
-	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
+	if((tinno_brightness)&&(!tinno_is_asia_area))
+		bl_lvl = BRIGHT_MAP[value];         //tinno map backlight
+	else
+	      MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
 				mfd->panel_info->brightness_max);
+    
+      //printk("backlight  map ap=%d, kenel=%d\n",value,bl_lvl );
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;
@@ -2473,7 +2519,7 @@ static int mdss_fb_alloc_fbmem(struct msm_fb_data_type *mfd)
 
 static int mdss_fb_register(struct msm_fb_data_type *mfd)
 {
-	int ret = -ENODEV;
+	int ret = -ENODEV,rc;
 	int bpp;
 	char panel_name[20];
 	struct mdss_panel_info *panel_info = mfd->panel_info;
@@ -2688,6 +2734,13 @@ static int mdss_fb_register(struct msm_fb_data_type *mfd)
 	pr_info("FrameBuffer[%d] %dx%d registered successfully!\n", mfd->index,
 					fbi->var.xres, fbi->var.yres);
 
+       if(mfd->index == 0){
+                //tinno_brightness = of_property_read_bool(mfd->pdev-> dev.of_node , "qcom,tinno-brightness-level");
+        	rc= of_property_read_u32(mfd->pdev-> dev.of_node , "qcom,tinno-brightness-level", &tinno_brightness);   //tinno map backlight
+        	tinno_brightness = (!rc ? tinno_brightness : 0);
+        	printk("%s: qcom,tinno-brightness-level %d ,%d\n", __func__, rc, tinno_brightness);
+       }
+    
 	return 0;
 }
 
@@ -5001,6 +5054,8 @@ int __init mdss_fb_init(void)
 {
 	int rc = -ENODEV;
 
+      tinno_market_area_is_asia(); //tinno map backlight
+       
 	if (fb_get_options("msmfb", NULL))
 		return rc;
 

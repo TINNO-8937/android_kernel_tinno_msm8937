@@ -1,0 +1,99 @@
+/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "dsi-panel-truly-1080p-video.dtsi"
+#include "dsi-panel-truly-1080p-cmd.dtsi"
+#include "dsi-panel-icn9706-720-1440p-video.dtsi"
+#include "dsi-panel-ili9881c-720-1440p-video.dtsi"
+#include "dsi-panel-td4310-tcl-1080p-video.dtsi"
+#include "dsi-panel-td4310-boe-1080p-video.dtsi"
+#include "dsi-panel-ili9881a-720-1528p-tcl-video.dtsi"
+
+&soc {
+	dsi_panel_pwr_supply: dsi_panel_pwr_supply {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		qcom,panel-supply-entry@0 {
+			reg = <0>;
+			qcom,supply-name = "vdd";
+			qcom,supply-min-voltage = <2850000>;
+			qcom,supply-max-voltage = <2850000>;
+			qcom,supply-enable-load = <100000>;
+			qcom,supply-disable-load = <100>;
+		};
+
+		qcom,panel-supply-entry@1 {
+			reg = <1>;
+			qcom,supply-name = "vddio";
+			qcom,supply-min-voltage = <1800000>;
+			qcom,supply-max-voltage = <1800000>;
+			qcom,supply-enable-load = <100000>;
+			qcom,supply-disable-load = <100>;
+		};
+	};
+};
+
+&dsi_truly_1080_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1a 08 09 05 03 04 a0];
+};
+
+&dsi_truly_1080_cmd {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1e 08 09 05 03 04 a0
+		23 1a 08 09 05 03 04 a0];
+};
+&dsi_td4310_tcl_1080_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1b 08 09 05 03 04 a0];
+};
+
+&dsi_td4310_boe_1080_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1f 08 09 05 03 04 a0
+		24 1b 08 09 05 03 04 a0];
+};
+
+&dsi_ili9881c_720_1440_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 1c 05 06 03 03 04 a0];
+};
+
+&dsi_ili9881a_720_1528_tcl_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 1c 05 06 03 03 04 a0];
+};
+
+&dsi_icn9706_720_1440_vid {
+	qcom,mdss-dsi-panel-timings-phy-v2 = [1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 0f 05 06 03 03 04 a0
+		1f 1c 05 06 03 03 04 a0];
+};

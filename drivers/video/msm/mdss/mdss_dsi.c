@@ -285,7 +285,34 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+#ifdef CONFIG_GPIO_TINNO_LCD_LDO
+	ret = mdss_dsi_panel_reset(pdata, 0);
+	if (ret) {
+		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
+		ret = 0;
+	}
 
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
+
+	msleep(1);
+	
+	ret = msm_dss_enable_vreg(
+		ctrl_pdata->panel_power_data.vreg_config,
+		ctrl_pdata->panel_power_data.num_vreg, 0);
+	if (ret)
+		pr_err("%s: failed to disable vregs for %s\n",
+			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+	msleep(1);
+	
+	ret = mdss_dsi_panel_disp_en_gpio(pdata, 0);
+	if (ret)
+	{
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+		ret = 0;
+	}
+#else
 	ret = mdss_dsi_panel_reset(pdata, 0);
 	if (ret) {
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
@@ -301,6 +328,7 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+#endif 
 
 end:
 	return ret;
@@ -318,6 +346,14 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+
+#ifdef CONFIG_GPIO_TINNO_LCD_LDO
+	ret = mdss_dsi_panel_disp_en_gpio(pdata, 1);
+	if (ret)
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+	msleep(5);
+#endif
 
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
@@ -3166,6 +3202,72 @@ end:
 	return rc;
 }
 
+//tinno add vio mode TE
+static void te_irq_work(struct work_struct *work)
+{		
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+	struct delayed_work *dw = to_delayed_work(work);
+
+	ctrl_pdata = container_of(dw, struct mdss_dsi_ctrl_pdata, te_event_work);
+	if (!ctrl_pdata) {
+		pr_err("%s: invalid ctrl data\n", __func__);
+		return;
+	}
+
+      if(ctrl_pdata->te_count%60==0)
+           pr_info("%s  count = %d\n", __func__, ctrl_pdata->te_count);
+
+	enable_irq(ctrl_pdata->tinno_vio_te_irq);
+}
+static irqreturn_t te_interrupt(int irq, void *data)
+{
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = data;
+	
+       disable_irq_nosync(irq);
+
+	if(ctrl_pdata->te_count++ < 3000)
+      	 	enable_irq(irq);
+	else
+	 	queue_delayed_work(ctrl_pdata->workq, &ctrl_pdata->te_event_work, msecs_to_jiffies(1000));   //must be less than  #define STATUS_CHECK_INTERVAL_MS 5000
+	
+       return IRQ_HANDLED;
+}
+
+static int init_te_irq(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+       int rc = -1;
+
+       if (gpio_is_valid(ctrl_pdata->tinno_vio_te_gpio)) {
+               rc = gpio_request(ctrl_pdata->tinno_vio_te_gpio, "tinno_vio_te-gpio");
+               if (rc < 0) {
+                       pr_err("%s: gpio_request fail rc=%d\n", __func__,rc);
+                       return rc ;
+               }
+
+               rc = gpio_direction_input(ctrl_pdata->tinno_vio_te_gpio);
+               if (rc < 0) {
+                       pr_err("%s: gpio_direction_input fail rc=%d\n", __func__ ,rc);
+                       return rc ;
+               }
+			   
+               ctrl_pdata->te_count =0;
+               ctrl_pdata->tinno_vio_te_irq = gpio_to_irq(ctrl_pdata->tinno_vio_te_gpio);
+		  printk("%s:  irq = %d, gpio=%d\n", __func__, ctrl_pdata->tinno_vio_te_irq, ctrl_pdata->tinno_vio_te_gpio);
+               rc = request_threaded_irq(ctrl_pdata->tinno_vio_te_irq, te_interrupt, NULL,
+                       IRQF_TRIGGER_RISING|IRQF_ONESHOT,
+                       "tinno_vio_te-irq", ctrl_pdata);
+               if (rc < 0) {
+                       pr_err("%s: request_irq fail rc=%d\n",__func__, rc);
+                       return rc ;
+               }
+       }else{
+               pr_err("%s: irq gpio not provided\n",__func__);
+               return rc ;
+       }
+       return 0;
+}
+//tinno add vio mode TE end
+
 static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -3335,6 +3437,8 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 	}
 
 	INIT_DELAYED_WORK(&ctrl_pdata->dba_work, mdss_dsi_dba_work);
+	INIT_DELAYED_WORK(&ctrl_pdata->te_event_work, te_irq_work);		//tinno add vio mode TE
+	
 
 	pr_info("%s: Dsi Ctrl->%d initialized, DSI rev:0x%x, PHY rev:0x%x\n",
 		__func__, index, ctrl_pdata->shared_data->hw_rev,
@@ -4083,6 +4187,21 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 					__func__, __LINE__);
 	}
 
+//tinno add vio mode TE
+	ctrl_pdata->tinno_vio_te_gpio= of_get_named_gpio(ctrl_pdev->dev.of_node,
+		"qcom,irq-te-tinno-vio", 0);
+	if (!gpio_is_valid(ctrl_pdata->tinno_vio_te_gpio)){
+		pr_err("%s:%d, TE gpio not specified\n",
+						__func__, __LINE__);
+		ctrl_pdata->tinno_vio_te_enable = false;
+	}
+	else{
+		ctrl_pdata->tinno_vio_te_enable = true;
+		printk("%s: , gpio=%d\n", __func__, ctrl_pdata->tinno_vio_te_gpio);
+	}
+//tinno add vio mode TE end
+
+	
 	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-te-gpio", 0);
 
@@ -4307,6 +4426,11 @@ int dsi_panel_device_register(struct platform_device *ctrl_pdev,
 	panel_debug_register_base("panel",
 		ctrl_pdata->ctrl_base, ctrl_pdata->reg_size);
 
+//tinno add vio mode TE
+	if(ctrl_pdata->tinno_vio_te_enable)
+		init_te_irq(ctrl_pdata);
+//tinno add vio mode TE end
+		 
 	pr_debug("%s: Panel data initialized\n", __func__);
 	return 0;
 }

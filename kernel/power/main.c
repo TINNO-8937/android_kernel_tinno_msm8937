@@ -590,6 +590,36 @@ power_attr(pm_freeze_timeout);
 
 #endif	/* CONFIG_FREEZER*/
 
+// TINNO BEGIN
+// Added by cyong on Oct.18 , 2017 for debug power consume
+#ifdef CONFIG_TINNO_KE_DBUG
+bool pm_consume_debug;
+
+static ssize_t pm_consume_debug_show(struct kobject *kobj,
+				   struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", pm_consume_debug);
+}
+
+static ssize_t pm_consume_debug_store(struct kobject *kobj,
+				    struct kobj_attribute *attr,
+				    const char *buf, size_t n)
+{
+	unsigned long val;
+
+	if (kstrtoul(buf, 10, &val))
+		return -EINVAL;
+
+	if (val > 1)
+		return -EINVAL;
+
+	pm_consume_debug = !!val;
+	return n;
+}
+power_attr(pm_consume_debug);
+#endif
+// TINNO END
+
 static struct attribute * g[] = {
 	&state_attr.attr,
 #ifdef CONFIG_PM_TRACE
@@ -616,6 +646,12 @@ static struct attribute * g[] = {
 #ifdef CONFIG_FREEZER
 	&pm_freeze_timeout_attr.attr,
 #endif
+// TINNO BEGIN
+// Added by cyong on Oct.18 , 2017 for debug power consume
+#ifdef CONFIG_TINNO_KE_DBUG
+	&pm_consume_debug_attr.attr,
+#endif
+// TINNO END
 	NULL,
 };
 

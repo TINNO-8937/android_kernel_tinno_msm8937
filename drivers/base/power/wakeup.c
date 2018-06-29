@@ -729,6 +729,31 @@ void pm_get_active_wakeup_sources(char *pending_wakeup_source, size_t max)
 }
 EXPORT_SYMBOL_GPL(pm_get_active_wakeup_sources);
 
+// TINNO BEGIN
+//Tinno:CJ we need see the last active ws in some times
+#ifdef CONFIG_TINNO_KE_DBUG
+void pm_print_active_wakeup_sources_from_check_time(ktime_t check_time)
+{
+    struct wakeup_source *ws = NULL;
+    ktime_t now = ktime_get();
+    if(ktime_us_delta(now,check_time) > 20 * USEC_PER_SEC) {
+        pr_info("TPM:check_time is %lld ms before \n",ktime_us_delta(now,check_time) / USEC_PER_MSEC);
+        // this means not wakeup source change in 20 sec. 
+        // pm_get_wakelocks will print another log enough for debug
+        return; 
+    }
+    pr_info("TPM:combined_event_count is %x\n",atomic_read(&combined_event_count));
+    rcu_read_lock();
+    list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
+        if(ktime_after(ws->last_time , check_time)) {
+			pr_info("TPM:last wakeup source change at %lld ms before from : %s\n",ktime_us_delta(now,ws->last_time) / USEC_PER_MSEC, ws->name);
+        }
+    }
+    rcu_read_unlock();
+}
+#endif
+// TINNO END
+
 void pm_print_active_wakeup_sources(void)
 {
 	struct wakeup_source *ws;
@@ -812,6 +837,12 @@ void pm_wakeup_clear(void)
 bool pm_get_wakeup_count(unsigned int *count, bool block)
 {
 	unsigned int cnt, inpr;
+// TINNO BEGIN
+//Tinno:CJ we need see the last active ws in some times
+#ifdef CONFIG_TINNO_KE_DBUG
+	ktime_t now = {0};
+#endif
+// TINNO END
 
 	if (block) {
 		DEFINE_WAIT(wait);
@@ -822,14 +853,40 @@ bool pm_get_wakeup_count(unsigned int *count, bool block)
 			split_counters(&cnt, &inpr);
 			if (inpr == 0 || signal_pending(current))
 				break;
-
+// TINNO BEGIN
+//Tinno:CJ we need see the last active ws in some times
+#ifdef CONFIG_TINNO_KE_DBUG
+			if(pm_consume_debug){
+			    now = ktime_get();
+			    printk("TPM:pm_get_wakeup_count block for %x:%x\n",cnt,inpr);
+			    pm_print_active_wakeup_sources();
+			}
+#endif
+// TINNO END
 			schedule();
+// TINNO BEGIN
+//Tinno:CJ we need see the last active ws in some times
+#ifdef CONFIG_TINNO_KE_DBUG
+			if(pm_consume_debug){
+			    printk("TPM:pm_get_wakeup_count scheduled \n");
+			    pm_print_active_wakeup_sources_from_check_time(now);
+			}
+#endif
+// TINNO END
 		}
 		finish_wait(&wakeup_count_wait_queue, &wait);
 	}
 
 	split_counters(&cnt, &inpr);
 	*count = cnt;
+// TINNO BEGIN
+//Tinno:CJ we need see the last active ws in some times
+#ifdef CONFIG_TINNO_KE_DBUG
+	if(pm_consume_debug && now.tv64 != 0) {
+	    printk("TPM:pm_get_wakeup_count block exit\n");
+	}
+#endif
+// TINNO END
 	return !inpr;
 }
 

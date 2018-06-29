@@ -2803,7 +2803,12 @@ static const struct pid_entry tgid_base_stuff[] = {
 	ONE("wchan",      S_IRUGO, proc_pid_wchan),
 #endif
 #ifdef CONFIG_STACKTRACE
+#ifdef TINNO_DEBUG_FEATURE_ENHANCED
+    //  Tinno:CJ android ANR need kernel stack to trace the root cause
+	ONE("stack",      S_IRUSR|S_IRGRP|S_IROTH, proc_pid_stack),
+#else
 	ONE("stack",      S_IRUSR, proc_pid_stack),
+#endif	
 #endif
 #ifdef CONFIG_SCHEDSTATS
 	ONE("schedstat",  S_IRUGO, proc_pid_schedstat),

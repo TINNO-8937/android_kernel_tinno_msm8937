@@ -970,6 +970,7 @@ static int qusb_phy_linestate_with_idp_src(struct usb_phy *phy)
 	pr_debug("%s: int_status:%x, dpdm:%x\n", __func__, int_status, ret);
 
 	/* Re-initialize PHY */
+	// pony.ma, DATE20180124, CHGAAES-360 usb eye fail, DATE20180124-01 LINE
 	qusb_phy_init(phy);
 
 	return ret;

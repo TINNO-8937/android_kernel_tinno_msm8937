@@ -771,6 +771,13 @@ noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 
 	a->selinux_audit_data = &sad;
 
+#ifdef TINNO_CUSTOM_FEATURE_SKIP_GRANTED_SEPOLICY_LOG
+	// Tinno:CJ dont log any granted 
+	if(!denied) {
+		return 0;
+	}
+#endif
+
 	common_lsm_audit(a, avc_audit_pre_callback, avc_audit_post_callback);
 	return 0;
 }

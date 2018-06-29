@@ -843,7 +843,7 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		return -EINVAL;
 	}
 
-	pr_debug("PMIC input: code=%d, sts=0x%hhx\n",
+	printk("PMIC input: code=%d, sts=0x%hhx\n",
 					cfg->key_code, pon_rt_sts);
 	key_status = pon_rt_sts & pon_rt_bit;
 
@@ -2266,6 +2266,7 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 
 	pon->kpdpwr_dbc_enable = of_property_read_bool(pon->spmi->dev.of_node,
 					"qcom,kpdpwr-sw-debounce");
+        printk("qpnp_pon_probe: kpdpwr-dbc-enable %d\n", pon->kpdpwr_dbc_enable);
 
 	rc = of_property_read_u32(pon->spmi->dev.of_node,
 				"qcom,warm-reset-poweroff-type",

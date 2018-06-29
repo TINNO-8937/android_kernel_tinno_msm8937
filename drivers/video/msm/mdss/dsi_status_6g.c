@@ -164,6 +164,18 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 	if ((mipi->mode == DSI_CMD_MODE) && !ctrl_pdata->burst_mode_enabled)
 		mutex_unlock(&mdp5_data->ov_lock);
 
+//tinno add vio mode TE
+	if(ctrl_pdata->tinno_vio_te_enable){
+	       if(ctrl_pdata->te_count_priv!= ctrl_pdata->te_count){				
+	               ctrl_pdata->te_count_priv = ctrl_pdata->te_count;
+	       }else{
+	       	  printk("%s: tinno te_count %d, priv =%d\n", __func__, ctrl_pdata->te_count, ctrl_pdata->te_count_priv);
+	               ret = 0;
+	       }
+	}
+//tinno add vio mode TE end
+
+
 	if ((pstatus_data->mfd->panel_power_state == MDSS_PANEL_POWER_ON)) {
 		if (ret > 0)
 			schedule_delayed_work(&pstatus_data->check_status,

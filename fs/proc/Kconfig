@@ -71,3 +71,10 @@ config PROC_PAGE_MONITOR
 	  /proc/pid/smaps, /proc/pid/clear_refs, /proc/pid/pagemap,
 	  /proc/kpagecount, and /proc/kpageflags. Disabling these
           interfaces will reduce the size of the kernel by approximately 4kb.
+
+config TINNO_LK_LOG_SUPPORT
+    bool
+    depends on PROC_FS
+    default y
+    ---help---
+        The proc fs interface for show the lk log

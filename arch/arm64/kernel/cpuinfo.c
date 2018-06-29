@@ -50,6 +50,8 @@ static char *icache_policy_str[] = {
 
 unsigned long __icache_flags;
 
+static const char *machine_desc_str; //TINNO_SH_Jhyu IAAO-429 Adding HW version 
+
 static const char *hwcap_str[] = {
 	"fp",
 	"asimd",
@@ -99,6 +101,13 @@ static const char *compat_hwcap2_str[] = {
 	NULL
 };
 #endif /* CONFIG_COMPAT */
+
+/* TINNO_SH_Jhyu IAAO-429 Adding HW version */
+void machine_desc_set(const char *str)
+{
+	machine_desc_str = str;
+}
+/* TINNO_SH_Jhyu END*/
 
 static int c_show(struct seq_file *m, void *v)
 {
@@ -151,6 +160,7 @@ static int c_show(struct seq_file *m, void *v)
 		seq_printf(m, "CPU variant\t: 0x%x\n", MIDR_VARIANT(midr));
 		seq_printf(m, "CPU part\t: 0x%03x\n", MIDR_PARTNUM(midr));
 		seq_printf(m, "CPU revision\t: %d\n\n", MIDR_REVISION(midr));
+		seq_printf(m, "Hardware\t: %s\n", machine_desc_str);//TINNO_SH_Jhyu IAAO-429 Adding HW version
 	}
 
 	if (!arch_read_hardware_id)

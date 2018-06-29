@@ -453,6 +453,15 @@ extern bool pm_print_times_enabled;
 #define pm_print_times_enabled	(false)
 #endif
 
+// TINNO BEGIN
+// Added by cyong on Oct.18 , 2017 for debug power consume
+#ifdef CONFIG_TINNO_KE_DBUG
+extern bool pm_consume_debug;
+#else
+#define pm_consume_debug	(false)
+#endif
+// TINNO END
+
 #ifdef CONFIG_PM_AUTOSLEEP
 
 /* kernel/power/autosleep.c */

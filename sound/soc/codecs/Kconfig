@@ -871,4 +871,19 @@ config SND_SOC_MSM_HDMI_CODEC_RX
 config SND_SOC_MSM_HDMI_DBA_CODEC_RX
 	bool "HDMI DBA Audio Playback"
 	depends on MSM_DBA
+	
+#add AW87319 PA  TN:peter
+config SND_SOC_AW87339
+	tristate "Build SND_SOC_AW87339 PA drivers"
+	depends on I2C
+	default y
+	help
+	AW87339 PA kernel driver
+
+# TINNO BEGIN
+# huaidong.tan , IAAO-315 , DATE20171120 , bump up micbias2 from 1.8V to 2.7V
+config TINNO_AUDIO_MICBIAS_2V7
+	tristate "enable micbias 2v7"
+# TINNO END
+
 endmenu

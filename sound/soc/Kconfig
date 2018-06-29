@@ -63,5 +63,21 @@ source "sound/soc/codecs/Kconfig"
 # generic frame-work
 source "sound/soc/generic/Kconfig"
 
+#++  camera selfie stick & external pa TN:peter
+config CAMERA_SELFIE_STICK_SUSPORT
+	bool "CAMERA_SELFIE_STICK_SUSPORT"
+	default n
+	help
+	  camera selfie stick
+
+# TINNO BEGIN
+# huaidong.tan , IAAO-2566 , DATE20180416 , detect headphone impedance
+config TINNO_AUDIO_HEADPHONES_HIGH_IMPED
+	bool "CONFIG_TINNO_AUDIO_HEADPHONES_HIGH_IMPED"
+	default n
+	help
+	  detect high impedance headphones, then switch to the according acdb
+# TINNO END
+
 endif	# SND_SOC
 

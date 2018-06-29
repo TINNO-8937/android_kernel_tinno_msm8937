@@ -45,6 +45,8 @@
 #include "msm8916-wcd-irq.h"
 #include "msm8x16_wcd_registers.h"
 
+#include <linux/switch.h>//yangliang add fot ftm hph detect20150830
+
 #define MSM8X16_WCD_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000)
 #define MSM8X16_WCD_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
@@ -132,14 +134,22 @@ enum {
 static const DECLARE_TLV_DB_SCALE(digital_gain, 0, 1, 0);
 static const DECLARE_TLV_DB_SCALE(analog_gain, 0, 25, 1);
 static struct snd_soc_dai_driver msm8x16_wcd_i2s_dai[];
-/* By default enable the internal speaker boost */
-static bool spkr_boost_en = true;
+/* By default disable the internal speaker boost   TN:peter*/
+static bool spkr_boost_en = false;
 
 #define MSM8X16_WCD_ACQUIRE_LOCK(x) \
 	mutex_lock_nested(&x, SINGLE_DEPTH_NESTING)
 
 #define MSM8X16_WCD_RELEASE_LOCK(x) mutex_unlock(&x)
 
+//yangliang add for ftm hph detect20150830
+#ifdef CONFIG_SWITCH
+struct switch_dev wcd_mbhc_headset_switch = {
+	.name = "h2w",
+};
+struct switch_dev wcd_mbhc_button_switch = {
+	.name = "linebtn",};
+#endif
 
 /* Codec supports 2 IIR filters */
 enum {
@@ -307,6 +317,12 @@ static void msm8x16_wcd_configure_cap(struct snd_soc_codec *codec,
 		bool micbias1, bool micbias2);
 static bool msm8x16_wcd_use_mb(struct snd_soc_codec *codec);
 
+// TINNO BEGIN
+// huaidong.tan , IAAO-315 , DATE20171120 , bump up micbias2 from 1.8V to 2.7V
+#ifdef CONFIG_TINNO_AUDIO_MICBIAS_2V7
+static void msm8x16_wcd_mbhc_micb_2V7_ctrl(struct snd_soc_codec *codec,bool en);
+#endif
+// TINNO END
 struct msm8x16_wcd_spmi msm8x16_wcd_modules[MAX_MSM8X16_WCD_DEVICE];
 
 static void *adsp_state_notifier;
@@ -360,9 +376,14 @@ static void wcd_mbhc_meas_imped(struct snd_soc_codec *codec,
 				0x04, 0x04);
 		/* Wait for 2ms for measurement to complete */
 		usleep_range(2000, 2100);
+#if defined(CONFIG_PROJECT_c800_tinno)
+		/* speaker is connect to HPHR, so we only compute HPHL impedance to ensure the accuracy */
+		*impedance_r = *impedance_l;
+#else
 		/* Read Right impedance value from Result1 */
 		*impedance_r = snd_soc_read(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
+#endif
 		snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
 				0x04, 0x00);
@@ -675,8 +696,14 @@ static void msm8x16_wcd_mbhc_internal_micbias_ctrl(struct snd_soc_codec *codec,
 
 static bool msm8x16_wcd_mbhc_hph_pa_on_status(struct snd_soc_codec *codec)
 {
+#if defined(CONFIG_PROJECT_c800_tinno)
+	/* Both=0x30, HPHL=0x20(which can really help confirm the hp is on) */
+	return (snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_RX_HPH_CNP_EN) &
+		0x20) ? true : false;
+#else
 	return (snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_RX_HPH_CNP_EN) &
 		0x30) ? true : false;
+#endif
 }
 
 static void msm8x16_wcd_mbhc_program_btn_thr(struct snd_soc_codec *codec,
@@ -1003,6 +1030,12 @@ static const struct wcd_mbhc_cb mbhc_cb = {
 	.micbias_enable_status = msm8x16_wcd_micb_en_status,
 	.mbhc_bias = msm8x16_wcd_enable_master_bias,
 	.mbhc_common_micb_ctrl = msm8x16_wcd_mbhc_common_micb_ctrl,
+	// TINNO BEGIN
+	// huaidong.tan , IAAO-315 , DATE20171120 , bump up micbias2 from 1.8V to 2.7V
+	#ifdef CONFIG_TINNO_AUDIO_MICBIAS_2V7
+	.mbhc_micb2_2v7_ctrl = msm8x16_wcd_mbhc_micb_2V7_ctrl,
+	#endif
+	// TINNO END
 	.micb_internal = msm8x16_wcd_mbhc_internal_micbias_ctrl,
 	.hph_pa_on_status = msm8x16_wcd_mbhc_hph_pa_on_status,
 	.set_btn_thr = msm8x16_wcd_mbhc_program_btn_thr,
@@ -4236,6 +4269,7 @@ static int msm8x16_wcd_lo_dac_event(struct snd_soc_dapm_widget *w,
 			MSM8X16_WCD_A_ANALOG_RX_LO_DAC_CTL, 0x08, 0x08);
 		snd_soc_update_bits(codec,
 			MSM8X16_WCD_A_ANALOG_RX_LO_DAC_CTL, 0x40, 0x40);
+		msleep(5);// huaidong.tan , IAAO-1966 , DATE20180130 , solve volume alteration issue
 		break;
 	case SND_SOC_DAPM_POST_PMU:
 		snd_soc_update_bits(codec,
@@ -4461,6 +4495,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"LINEOUT PA", NULL, "LINE_OUT"},
 	{"LINE_OUT", "Switch", "LINEOUT DAC"},
 	{"LINEOUT DAC", NULL, "RX3 CHAIN"},
+	{"Ext Spk Switch", "On", "LINEOUT PA"},//Tinno caoming add for c860
 
 	/* lineout to WSA */
 	{"WSA_SPK OUT", NULL, "LINEOUT PA"},
@@ -5680,6 +5715,21 @@ void msm8x16_wcd_hs_detect_exit(struct snd_soc_codec *codec)
 }
 EXPORT_SYMBOL(msm8x16_wcd_hs_detect_exit);
 
+// TINNO BEGIN
+// huaidong.tan , IAAO-315 , DATE20171120 , bump up micbias2 from 1.8V to 2.7V
+#ifdef CONFIG_TINNO_AUDIO_MICBIAS_2V7
+static void msm8x16_wcd_mbhc_micb_2V7_ctrl(struct snd_soc_codec *codec,bool en)
+{
+    /*Page 849 in document 80-NT390-2X, reg 0x0001F141, up to 2P70V and normal to 1P80V*/
+    pr_debug("\n %s: micbias_en= %d\n", __func__, en);
+    if(en)
+	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MICB_1_VAL, 0xb0);
+    else
+	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MICB_1_VAL, 0x20);
+}
+#endif
+// TINNO END
+
 void msm8x16_update_int_spk_boost(bool enable)
 {
 	pr_debug("%s: enable = %d\n", __func__, enable);
@@ -5865,6 +5915,16 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
 		      wcd_mbhc_registers, true);
 
+#ifdef CONFIG_SWITCH //yangliang add for ftm hph detect20150830
+	ret = switch_dev_register(&wcd_mbhc_headset_switch);
+	if (ret < 0) {
+		dev_err(codec->dev, "not able to register switch device h2w\n");
+	}
+	ret = switch_dev_register(&wcd_mbhc_button_switch);
+	if (ret < 0) {
+		dev_err(codec->dev, "not able to register switch device linebtn\n");
+	}
+#endif
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;
@@ -5886,6 +5946,10 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 	if (!adsp_state_notifier) {
 		dev_err(codec->dev, "Failed to register adsp state notifier\n");
 		iounmap(msm8x16_wcd->dig_base);
+ #ifdef CONFIG_SWITCH//yangliang add for ftm hph detect20150830
+		switch_dev_unregister(&wcd_mbhc_headset_switch);
+		switch_dev_unregister(&wcd_mbhc_button_switch);
+ #endif		
 		kfree(msm8x16_wcd_priv->fw_data);
 		kfree(msm8x16_wcd_priv);
 		registered_codec = NULL;
