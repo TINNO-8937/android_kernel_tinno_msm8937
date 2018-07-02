@@ -173,6 +173,11 @@ static void sdhci_dumpregs(struct sdhci_host *host)
 		       readl(host->ioaddr + SDHCI_ADMA_ADDRESS_LOW));
 	}
 
+//TINNO BEGIN
+//KBA-170103020323 for emmc verification test
+    host->mmc->err_occurred = true;
+//TINNO END
+
 	if (host->ops->dump_vendor_regs)
 		host->ops->dump_vendor_regs(host);
 	sdhci_dump_state(host);

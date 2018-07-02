@@ -52,6 +52,7 @@
 #include "debug.h"
 #include "xhci.h"
 
+#include <linux/switch.h>//yangliang add for ftm-otg detect;20150902
 #define DWC3_IDEV_CHG_MAX 1500
 #define DWC3_HVDCP_CHG_MAX 1800
 
@@ -262,6 +263,7 @@ struct dwc3_msm {
 static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
 static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA);
 
+static struct switch_dev otg_state;//yangliang add for ftm-otg-cts detect;20150902
 /**
  *
  * Read register with debug info.
@@ -3081,6 +3083,15 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 		dwc3_ext_event_notify(mdwc);
 	}
 
+	otg_state.name = "otg_state";	
+	otg_state.index = 0;
+	otg_state.state = 0;
+	ret = switch_dev_register(&otg_state);
+	if(ret)
+	{
+		dev_dbg(0,"switch_dev_register returned:%d!\n", ret);
+		return 1;
+	}
 	return 0;
 
 put_dwc3:
@@ -3205,6 +3216,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 
 	if (on) {
 		dev_dbg(mdwc->dev, "%s: turn on host\n", __func__);
+		switch_set_state((struct switch_dev *)&otg_state,1);//yangliang add for ftm-otg-cts detect;20150902
 
 		pm_runtime_get_sync(mdwc->dev);
 		dbg_event(0xFF, "StrtHost gync",
@@ -3269,6 +3281,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		pm_runtime_put_sync_autosuspend(mdwc->dev);
 	} else {
 		dev_dbg(mdwc->dev, "%s: turn off host\n", __func__);
+		switch_set_state((struct switch_dev *)&otg_state,0);//yangliang add for ftm-otg-cts detect;20150902
 
 		usb_unregister_atomic_notify(&mdwc->usbdev_nb);
 		if (!IS_ERR(mdwc->vbus_reg))

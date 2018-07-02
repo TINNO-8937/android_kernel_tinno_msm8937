@@ -376,3 +376,9 @@ obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
+
+#yangliang add for smartpa tfa9890 20161007
+obj-$(CONFIG_SND_SOC_TFA9890) += tfa/
+obj-$(CONFIG_SND_SOC_TFA9896) += tfa9896/
+#add AW87319 PA  liuweiwei
+obj-$(CONFIG_SND_SOC_AW87319) += aw87319_audio_m.o

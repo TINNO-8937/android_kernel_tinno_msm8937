@@ -2068,6 +2068,13 @@ struct filename {
 	bool			separate; /* should "name" be freed? */
 };
 
+// TINNO BEGIN
+// WIK_FR_OPEN_PLATFORM_S0063, Shuai.Chen, Modify For Prohibit Root Function
+#ifdef CONFIG_TINNO_ROOT_PROTECT
+int TINNO_ROOT_PROTECT_FLAGS(char *kernel_type, char *kernel_dir);
+#endif
+// TINNO END
+
 extern long vfs_truncate(struct path *, loff_t);
 extern int do_truncate(struct dentry *, loff_t start, unsigned int time_attrs,
 		       struct file *filp);

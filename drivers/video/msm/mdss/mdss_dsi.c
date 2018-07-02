@@ -285,7 +285,65 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+//BEGIN<20160622><sharp lcd  power timing>wangyanhui 	
+#if defined(CONFIG_PROJECT_P7201) ||defined(CONFIG_PROJECT_P7203) ||defined(CONFIG_PROJECT_P6901) ||defined(CONFIG_PROJECT_P7601)||defined(CONFIG_PROJECT_V3941)
+	ret = msm_dss_enable_vreg(
+		ctrl_pdata->panel_power_data.vreg_config,
+		ctrl_pdata->panel_power_data.num_vreg, 0);
+	if (ret)
+		pr_err("%s: failed to disable vregs for %s\n",
+			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+	msleep(5);
 
+	ret = mdss_dsi_panel_reset(pdata, 0);
+	if (ret) {
+		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
+		ret = 0;
+	}
+
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
+
+	
+	msleep(5);
+	ret = mdss_dsi_panel_disp_en_gpio(pdata, 0);
+	if (ret)
+	{
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+		ret = 0;
+	}
+	
+#elif defined(CONFIG_PROJECT_I9051)
+
+	ret = mdss_dsi_panel_vddi_vci_en_gpio(pdata, 1, 0); //power off vddi 1.8v
+	if (ret)
+	{
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+		ret = 0;
+	}
+	msleep(5);
+
+	ret = mdss_dsi_panel_reset(pdata, 0);
+	if (ret) {
+		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
+		ret = 0;
+	}
+
+	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
+		pr_debug("reset disable: pinctrl not enabled\n");
+
+	msleep(5);
+	ret = mdss_dsi_panel_vddi_vci_en_gpio(pdata, 0, 0);//power off vci 3.3v
+	if (ret)
+	{
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+		ret = 0;
+	}
+	
+#else
 	ret = mdss_dsi_panel_reset(pdata, 0);
 	if (ret) {
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
@@ -301,6 +359,8 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
+#endif
+//END<20160622><sharp lcd  power timing>wangyanhui 
 
 end:
 	return ret;
@@ -319,6 +379,38 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+//BEGIN<20160622><sharp lcd  power timing>wangyanhui 
+#if defined(CONFIG_PROJECT_P7201) ||defined(CONFIG_PROJECT_P7203) ||defined(CONFIG_PROJECT_P6901)||defined(CONFIG_PROJECT_P7601)||defined(CONFIG_PROJECT_V3941)
+	ret = mdss_dsi_panel_disp_en_gpio(pdata, 1);
+	if (ret)
+		pr_err("%s: Panel disp_en_gpio failed. ret=%d\n",
+					__func__, ret);
+
+	msleep(5);
+#endif
+//END<20160622><sharp lcd  power timing>wangyanhui 
+
+#if defined(CONFIG_PROJECT_I9051)
+	 //power on vddi 1.8v
+	ret = mdss_dsi_panel_vddi_vci_en_gpio(pdata, 1, 1);
+	if (ret)
+	{
+		pr_err("%s: Panel vddi_en_gpio failed. ret=%d\n",
+					__func__, ret);
+	}
+	msleep(5);
+
+	//power on vci 3.3v
+	ret = mdss_dsi_panel_vddi_vci_en_gpio(pdata, 0, 1);
+	if (ret)
+	{
+		pr_err("%s: Panel vci_en_gpio failed. ret=%d\n",
+					__func__, ret);
+	}
+	msleep(30);
+	
+#else
+
 	ret = msm_dss_enable_vreg(
 		ctrl_pdata->panel_power_data.vreg_config,
 		ctrl_pdata->panel_power_data.num_vreg, 1);
@@ -328,6 +420,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		return ret;
 	}
 
+#endif
 	/*
 	 * If continuous splash screen feature is enabled, then we need to
 	 * request all the GPIOs that have already been configured in the
@@ -1304,6 +1397,8 @@ static int mdss_dsi_update_panel_config(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	ctrl_pdata->panel_mode = pinfo->mipi.mode;
 	mdss_panel_get_dst_fmt(pinfo->bpp, pinfo->mipi.mode,
 			pinfo->mipi.pixel_packing, &(pinfo->mipi.dst_format));
+	pinfo->cont_splash_enabled = 0;
+
 	return ret;
 }
 
@@ -2949,7 +3044,11 @@ static int mdss_dsi_set_clk_rates(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 
 	rc = mdss_dsi_clk_set_link_rate(ctrl_pdata->dsi_clk_handle,
 					MDSS_DSI_LINK_ESC_CLK,
+#ifdef CONFIG_PROJECT_I9051
+					9600000,     //tinno
+#else
 					19200000,
+#endif
 					MDSS_DSI_CLK_UPDATE_CLK_RATE_AT_ON);
 	if (rc) {
 		pr_err("%s: dsi_esc_clk - clk_set_rate failed\n",
@@ -3921,6 +4020,18 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 					__func__, __LINE__);
 	}
 
+	#if defined(CONFIG_PROJECT_I9051)
+	if (ctrl_pdata->vddi_en_gpio <= 0) {
+		ctrl_pdata->vddi_en_gpio = of_get_named_gpio(
+			ctrl_pdev->dev.of_node,
+			"qcom,platform-vddi-en-gpio", 0);
+
+		if (!gpio_is_valid(ctrl_pdata->vddi_en_gpio))
+			pr_debug("%s:%d, Disp_en gpio not specified\n",
+					__func__, __LINE__);
+	}
+	#endif
+	
 	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
 		"qcom,platform-te-gpio", 0);
 

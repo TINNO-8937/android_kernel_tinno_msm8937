@@ -89,6 +89,14 @@
 #include <asm/smp.h>
 #endif
 
+// TINNO BEGIN
+// Shuai.Chen, Date20161124, Modify For Wiko Unify Version, HCABNA-195
+#ifdef CONFIG_WIKO_UNIFY
+#include <linux/of_device.h>
+#include <asm/uaccess.h>
+#endif
+// TINNO END
+
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
@@ -865,6 +873,106 @@ static void __init do_initcalls(void)
 		do_initcall_level(level);
 }
 
+// TINNO BEGIN
+// Shuai.Chen, Modify For Wiko Unify Version, HCABNA-195
+#ifdef CONFIG_WIKO_UNIFY
+struct proc_dir_entry *device_info_entry;
+
+DEF_TINNO_DEV_INFO(Market_Area);
+DEF_TINNO_DEV_INFO(Proximity_sensor);
+DEF_TINNO_DEV_INFO(Light_sensor);
+DEF_TINNO_DEV_INFO(Gyroscope_sensor);
+DEF_TINNO_DEV_INFO(Acceleration_sensor);
+DEF_TINNO_DEV_INFO(Magnetic_sensor);
+DEF_TINNO_DEV_INFO(OTG_open);
+DEF_TINNO_DEV_INFO(Hall);
+DEF_TINNO_DEV_INFO(ApkCustomize);
+
+
+extern char* saved_command_line;
+
+#define TINNO_CMD_CONFIG_SIZE 9        //if need extend, please modify CMD_BUF&TINNO_CMD_CONFIG_SIZE only
+char * CMD_BUF[]={
+"Market_Area=",
+"Proximity_sensor=",
+"Light_sensor=",
+"Gyroscope_sensor=",
+"Acceleration_sensor=",
+"Magnetic_sensor=",
+"OTG_open=",
+"Hall=",
+"ApkCustomize=",
+};
+
+int tinno_platform_adapter(void)
+{
+	char temp_buf[TINNO_CMD_CONFIG_SIZE][32] = {{0},{0},{0},{0},{0},{0},{0},{0}};
+	char *p, *q;
+	int i;
+
+	pr_err("1--------Leo, cmdline, mkdir Tinno devinfo folder!");
+	printk("1--------Leo, cmdline, mkdir Tinno devinfo folder!");
+	device_info_entry=proc_mkdir("Tinno_devinfo",NULL);
+	printk("1--------Leo, cmdline, mkdir Tinno devinfo folder!");
+	pr_err("2--------Leo, cmdline, mkdir Tinno devinfo folder!");
+	CAREAT_TINNO_DEV_INFO(Market_Area);
+	CAREAT_TINNO_DEV_INFO(Proximity_sensor);
+	CAREAT_TINNO_DEV_INFO(Light_sensor);
+	CAREAT_TINNO_DEV_INFO(Gyroscope_sensor);
+	CAREAT_TINNO_DEV_INFO(Acceleration_sensor);
+	CAREAT_TINNO_DEV_INFO(Magnetic_sensor);
+	CAREAT_TINNO_DEV_INFO(OTG_open);
+	CAREAT_TINNO_DEV_INFO(Hall);		//if need extend, please add behind
+	CAREAT_TINNO_DEV_INFO(ApkCustomize);
+
+	for(i=0; i < TINNO_CMD_CONFIG_SIZE; i ++ ){
+		p = strstr(saved_command_line, CMD_BUF[i]);
+		if(p == NULL){
+			printk("cmdline do not find tinno dev config %d \n", i);
+			break;
+		}
+		p += strlen(CMD_BUF[i]);
+		if((p - saved_command_line) > strlen(saved_command_line+1)){
+			printk("cmdline find tinno dev config error %d \n", i);
+			break;
+		}
+
+		q = p;
+		while(*q != ' ' && *q != '\0')
+			q++;
+		if((int)(q-p) > 32){
+			printk("cmdline find tinno dev config length error %d \n", i);
+			break;
+		}
+
+		memset((void*)temp_buf[i], 0, sizeof(temp_buf[i]));
+		strncpy((char*)temp_buf[i], (const char*)p, (int)(q-p));
+	}
+	SET_DEVINFO_STR(Market_Area,temp_buf[0]);
+	SET_DEVINFO_STR(Proximity_sensor,temp_buf[1]);
+	SET_DEVINFO_STR(Light_sensor,temp_buf[2]);
+	SET_DEVINFO_STR(Gyroscope_sensor,temp_buf[3]);
+	SET_DEVINFO_STR(Acceleration_sensor,temp_buf[4]);
+	SET_DEVINFO_STR(Magnetic_sensor,temp_buf[5]);
+	SET_DEVINFO_STR(OTG_open,temp_buf[6]);
+	SET_DEVINFO_STR(Hall,temp_buf[7]);			//if need extend, please add behind
+	SET_DEVINFO_STR(ApkCustomize,temp_buf[8]);
+
+	printk("Leo, Market_Area = %s!", temp_buf[0]);
+	printk("Leo, Proximity_sensor = %s!", temp_buf[1]);
+	printk("Leo, Light_sensor = %s!", temp_buf[2]);
+	printk("Leo, Gyroscope_sensor = %s!", temp_buf[3]);
+	printk("Leo, Acceleration_sensor = %s!", temp_buf[4]);
+	printk("Leo, Magnetic_sensor = %s!", temp_buf[5]);
+	printk("Leo, OTG_open = %s!", temp_buf[6]);
+	printk("Leo, Hall = %s!", temp_buf[7]);
+	printk("Leo, ApkCustomize = %s!", temp_buf[8]);
+
+	return 0;
+}
+#endif
+// TINNO END
+
 /*
  * Ok, the machine is now initialized. None of the devices
  * have been touched yet, but the CPU subsystem is up and
@@ -933,6 +1041,16 @@ static int __ref kernel_init(void *unused)
 	int ret;
 
 	kernel_init_freeable();
+
+	pr_err("--------Leo, Start Kernel Init!");
+
+// TINNO BEGIN
+// Shuai.Chen, Modify For Wiko Unify Version, HCABNA-195
+#ifdef CONFIG_WIKO_UNIFY
+    tinno_platform_adapter();
+#endif
+// TINNO END
+
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	free_initmem();

@@ -1,0 +1,353 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "msm8953-pinctrl.dtsi"
+#include "msm8953-audio-mtp.dtsi"
+#include "msm8953-camera-sensor-mtp.dtsi"
+
+&flash_led {
+	compatible = "qcom,qpnp-flash-led";
+	reg = <0xd300 0x100>;
+	pinctrl-names = "flash_led_enable","flash_led_disable";
+	pinctrl-0 = <&rear_flash_led_enable>;
+	pinctrl-1 = <&rear_flash_led_disable>;
+	qcom,follow-otst2-rb-disabled;
+};
+/* yangzhiyu add */
+&spi_7 { /* BLSP2 QUP3 */
+
+    qcom_fp@0 {
+        status = "ok";
+        compatible = "qcom,fingerprint";
+       vdd-supply = <&pm8953_l10>;
+       vio-supply = <&pm8953_l5>;
+        reg = <0>;
+        interrupt-parent = <&tlmm>;
+        interrupts = <48 0x1>;
+       qcom,irq-gpio = <&tlmm 48 0x00>;
+       qcom,reset-gpio = <&tlmm 140 0x00>;
+        spi-max-frequency = <8000000>;
+    };
+
+};
+
+//begin add "qcom,smb1351-charger" for tinno i9051 by huiyong.yin 20161114
+&i2c_2 {
+	/* Parallel-charger configuration */
+	smb1351-charger@1d {
+		compatible = "qcom,smb1351-charger";
+		reg = <0x1d>;
+		qcom,parallel-en-pin-polarity = <1>;
+		qcom,parallel-charger;
+		qcom,float-voltage-mv = <4400>;
+		qcom,recharge-mv = <100>;
+	};
+	/* yixuhong 20161129 add for RGB leds */
+	bct3253@30 { 
+			compatible = "bct,bct3253";
+			reg = <0x30>;
+		};
+};
+//end add "qcom,smb1351-charger" for tinno i9051 by huiyong.yin 20161114
+&i2c_3 { /*Goodix BLSP1 QUP5 */
+		goodix@5d {
+			compatible = "goodix,gt1x";
+			reg = <0x5d>;
+			interrupt-parent = <&tlmm>;
+			interrupts = <65 0x2008>;
+			//vdd_ana-supply = <&pm8953_l8>;
+			//vcc_i2c-supply = <&pm8953_l6>;
+			pinctrl-names = "pmx_ts_active","pmx_ts_suspend";//,"pmx_ts_release";
+			pinctrl-0 = <&ts_int_active &ts_reset_active &ts_ldo_en_active>;
+			pinctrl-1 = <&ts_int_suspend &ts_reset_suspend &ts_ldo_en_suspend>;
+			goodix,rst-gpio = <&tlmm 64 0x00>;
+			goodix,irq-gpio = <&tlmm 65 0x2008>;
+			goodix,vdd-gpio = <&tlmm 13 0x00>;
+	};
+};
+
+&i2c_5 { /* BLSP2 QUP1 (NFC) */
+	nq@28 {
+		compatible = "qcom,nq-nci";
+		reg = <0x28>;
+		qcom,nq-irq = <&tlmm 17 0x00>;
+		qcom,nq-ven = <&tlmm 16 0x00>;
+		qcom,nq-firm = <&tlmm 62 0x00>;
+		qcom,nq-clkreq = <&pm8953_gpios 2 0x00>;
+		qcom,nq-nc = <&pm8953_gpios 8 0x00>;
+		interrupt-parent = <&tlmm>;
+		qcom,clk-src = "BBCLK2";
+		interrupts = <17 0>;
+		interrupt-names = "nfc_irq";
+		pinctrl-names = "nfc_active", "nfc_suspend";
+		pinctrl-0 = <&nfc_int_active &nfc_disable_active>;
+		pinctrl-1 = <&nfc_int_suspend &nfc_disable_suspend>;
+		clocks = <&clock_gcc clk_bb_clk2_pin>;
+		clock-names = "ref_clk";
+	};
+};
+
+
+//yangliang add for smartpa 20161007
+&i2c_8 { /* BLSP2 QUP4 (smartPA) */
+	tfa98xx@34 {
+		compatible = "nxp,tfa9890";
+		reg = <0x34>;
+		//reset-gpio = <&tlmm 20 0x0>;//this should can be deleted yangliang
+		//nxp,rst-ctrl-gpio = <&tlmm 20 0x0>;//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang
+
+		pinctrl-names = "tlmm_gpio_key_active_reset_pa","tlmm_gpio_key_suspend_reset_pa";//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang
+
+		pinctrl-0 = <&gpio_key_active_reset_pa>;//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang
+		pinctrl-1 = <&gpio_key_suspend_reset_pa>;//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang
+		//gpio_keys,reset-gpio = <&tlmm 20 0>;//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang	
+		//nxp,rst-ctrl-gpio = <&tlmm 96 0x0>;//<BEGIN><FFBAKK-105><2014.12.29>add for reset pa;yangliang
+		reset-gpio = <&tlmm 96 0x0>;//reset-gpio is 96 yangliang
+		irq-gpio = <&tlmm 97 0x0>;//irq gpio is 97 yangliang
+		status = "okay";//added new20161026
+	};
+};
+//yangliang add for smartpa 20161007
+
+&pm8953_l10 {
+	regulator-max-microvolt = <2850000>;
+};
+
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		input-name = "gpio-keys";
+		pinctrl-names = "tlmm_gpio_key_active","tlmm_gpio_key_suspend";
+		pinctrl-0 = <&gpio_key_active>;
+		pinctrl-1 = <&gpio_key_suspend>;
+
+		vol_up {
+			label = "volume_up";
+			gpios = <&tlmm 85 0x1>;
+			linux,input-type = <1>;
+			linux,code = <115>;
+			debounce-interval = <15>;
+		};
+		home {  
+			label = "home";
+			gpios = <&tlmm 87 0x1>;
+			linux,input-type = <1>;
+			linux,code = <0x66>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+	};
+
+	//wangjian add hall ic
+	hall-ic{
+		compatible = "hall-switch";
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&hall_sensor_int_default>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <44 0x0>;
+		vddio-supply = <&pm8953_l6>;
+		linux,gpio-int = <&tlmm 44 0x1>;
+		linux,wakeup;
+		linux,min-uv = <1800000>;
+		linux,max-uv = <1800000>;
+	};
+};
+//wangyanhui add for front flightlight start 
+&flash_led{
+	qcom,front_flash_gpio_mode=<&tlmm 134 0x00>;
+	qcom,front_flash_gpio_en=<&tlmm 139 0x00>;
+};
+//wangyanhui add for front flightlight end
+
+&pmi_haptic{
+	qcom,actuator-type = "erm";
+	qcom,lra-auto-res-mode="qwd";
+	qcom,lra-high-z="opt1";
+	qcom,lra-res-cal-period = <0>;
+	qcom,wave-play-rate-us = <4165>;
+};
+
+&wled {
+	qcom,cons-sync-write-delay-us = <1000>;
+};
+
+&flash_led {
+	compatible = "qcom,qpnp-flash-led";
+	reg = <0xd300 0x100>;
+	qcom,follow-otst2-rb-disabled;
+};
+
+#include "msm8953-mdss-panels.dtsi"
+
+&mdss_mdp {
+	qcom,mdss-pref-prim-intf = "dsi";
+};
+
+&mdss_dsi {
+	hw-config = "single_dsi";
+};
+
+//yixuhong 20160813 modify for tinno i9051 lcd
+&mdss_dsi0 {
+	qcom,dsi-pref-prim-pan = <&dsi_wd5eaf01_boe_1080_cmd>;
+	//qcom,dsi-pref-prim-pan = <&dsi_wd5eaf01_boe_1080_vid>;
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
+
+	qcom,platform-te-gpio = <&tlmm 24 0>;
+	qcom,platform-reset-gpio = <&tlmm 61 0>;
+	qcom,platform-enable-gpio = <&tlmm 12 0>;
+	qcom,platform-vddi-en-gpio = <&tlmm 90 0>;
+	//qcom,platform-bklight-en-gpio = <&tlmm 59 0>;
+};
+
+&labibb {
+	status = "ok";
+	qpnp,qpnp-labibb-mode = "lcd";
+};
+
+&blsp1_uart0 {
+	status = "ok";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart_console_active>;
+};
+
+&mem_client_3_size {
+	qcom,peripheral-size = <0x500000>;
+};
+
+&sdhc_1 {
+	/* device core power supply */
+	vdd-supply = <&pm8953_l8>;
+	qcom,vdd-voltage-level = <2900000 2900000>;
+	qcom,vdd-current-level = <200 570000>;
+
+	/* device communication power supply */
+	vdd-io-supply = <&pm8953_l5>;
+	qcom,vdd-io-always-on;
+	qcom,vdd-io-lpm-sup;
+	qcom,vdd-io-voltage-level = <1800000 1800000>;
+	qcom,vdd-io-current-level = <200 325000>;
+
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc1_clk_on &sdc1_cmd_on &sdc1_data_on  &sdc1_rclk_on>;
+	pinctrl-1 = <&sdc1_clk_off &sdc1_cmd_off &sdc1_data_off &sdc1_rclk_off>;
+
+	qcom,clk-rates = <400000 20000000 25000000 50000000 100000000 192000000
+								384000000>;
+	qcom,nonremovable;
+	qcom,bus-speed-mode = "HS400_1p8v", "HS200_1p8v", "DDR_1p8v";
+
+	status = "ok";
+};
+
+&sdhc_2 {
+	/* device core power supply */
+	vdd-supply = <&pm8953_l11>;
+	qcom,vdd-voltage-level = <2950000 2950000>;
+	qcom,vdd-current-level = <15000 800000>;
+
+	/* device communication power supply */
+	vdd-io-supply = <&pm8953_l12>;
+	qcom,vdd-io-voltage-level = <1800000 2950000>;
+	qcom,vdd-io-current-level = <200 22000>;
+
+	pinctrl-names = "active", "sleep";
+	pinctrl-0 = <&sdc2_clk_on &sdc2_cmd_on &sdc2_data_on &sdc2_cd_on>;
+	pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off>;
+
+	#address-cells = <0>;
+	interrupt-parent = <&sdhc_2>;
+	interrupts = <0 1 2>;
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xffffffff>;
+	interrupt-map = <0 &intc 0 125 0
+		1 &intc 0 221 0
+		2 &tlmm 133 0>;
+	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
+	cd-gpios = <&tlmm 133 0x1>;
+
+	qcom,clk-rates = <400000 20000000 25000000 50000000 100000000
+								200000000>;
+	qcom,bus-speed-mode = "SDR12", "SDR25", "SDR50", "DDR50", "SDR104";
+
+	status = "ok";
+};
+
+//begin modify for tinno i9051 charge by huiyong.yin 20160826
+/*&pm8953_typec {
+	ss-mux-supply = <&pm8953_l13>;
+	qcom,ssmux-gpio = <&tlmm 139 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&typec_ssmux_config>;
+};*/
+
+/{
+	mtp_batterydata: qcom,battery-data {
+//		qcom,batt-id-range-pct = <15>;
+//		#include "batterydata-itech-3000mah.dtsi"
+//		#include "batterydata-ascent-3450mAh.dtsi"
+		qcom,batt-id-range-pct = <100>; //change for battery detect 
+//BEGIN: merge batterydata for i9051 battery by john.jiang 20170104
+//		#include "batterydata-tinno-3000mah-4400mv.dtsi"
+		#include "batterydata-tinno-3200mah-4400mv.dtsi"
+//END: merge batterydata for i9051 battery by john.jiang 20170104
+	};
+};
+
+&pmi8950_fg {
+	qcom,battery-data = <&mtp_batterydata>;
+	//add by lishengli 20160412
+	qcom,cold-bat-decidegc = <(0)>;
+	qcom,cool-bat-decidegc = <(100)>;
+	qcom,hot-bat-decidegc = <600>;
+	qcom,warm-bat-decidegc = <500>;
+	qcom,bad-battery-detection-enable;
+};
+
+&pmi8950_charger {
+	qcom,battery-data = <&mtp_batterydata>;
+/*	yixuhong 20161129 delete,we have RGB leds
+	qcom,chg-led-sw-controls;
+	qcom,chg-led-support;*/
+//	qcom,external-typec;
+//	qcom,typec-psy-name = "typec";
+};
+//end modify for tinno i9051 charge by huiyong.yin 20160826
+
+&pm8953_gpios {
+	/* GPIO 2 (NFC_CLK_REQ) */
+	gpio@c100 {
+		qcom,mode = <0>;
+		qcom,output-type = <0>;
+		qcom,pull = <0>;
+		qcom,vin-sel = <2>;
+		qcom,out-strength = <3>;
+		qcom,src-sel = <0>;
+		qcom,master-en = <1>;
+		status = "okay";
+	};
+
+	/* GPIO 8 (Not connect,set as input mode) */
+	gpio@c700 {
+		qcom,mode = <0>;
+		qcom,output-type = <0>;
+		qcom,pull = <0>;
+		qcom,vin-sel = <2>;
+		qcom,out-strength = <3>;
+		qcom,src-sel = <0>;
+		qcom,master-en = <1>;
+		status = "okay";
+	};
+};

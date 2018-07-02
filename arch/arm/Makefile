@@ -297,7 +297,12 @@ ifeq ($(CONFIG_USE_OF),y)
 KBUILD_DTBS := dtbs
 endif
 
+ifeq ($(CONFIG_PROJECT_V3941),y)
+DTSSUBDIR := v3941_32
+else
 DTSSUBDIR := qcom
+endif
+
 
 all:	$(KBUILD_IMAGE) $(KBUILD_DTBS)
 

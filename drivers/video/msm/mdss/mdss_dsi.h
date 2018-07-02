@@ -430,6 +430,9 @@ struct mdss_dsi_ctrl_pdata {
 	int disp_te_gpio;
 	int rst_gpio;
 	int disp_en_gpio;
+	#if defined(CONFIG_PROJECT_I9051)
+	int vddi_en_gpio;
+	#endif
 	int bklt_en_gpio;
 	int mode_gpio;
 	int bklt_ctrl;	/* backlight ctrl */
@@ -665,6 +668,14 @@ void mdss_dsi_set_burst_mode(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
 	u32 mask, u32 val);
 int mdss_dsi_phy_pll_reset_status(struct mdss_dsi_ctrl_pdata *ctrl);
+
+#if defined(CONFIG_PROJECT_P7201) || defined(CONFIG_PROJECT_P7203) || defined(CONFIG_PROJECT_P6901) || defined(CONFIG_PROJECT_P7601)|| defined(CONFIG_PROJECT_V3941)
+int mdss_dsi_panel_disp_en_gpio(struct mdss_panel_data *pdata, int enable);//LINE<20160622><sharp lcd  power timing>wangyanhui 
+#endif
+
+#if defined(CONFIG_PROJECT_I9051)
+int mdss_dsi_panel_vddi_vci_en_gpio(struct mdss_panel_data *pdata, int power_source,int enable);
+#endif
 
 static inline const char *__mdss_dsi_pm_name(enum dsi_pm_type module)
 {

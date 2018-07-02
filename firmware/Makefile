@@ -31,6 +31,10 @@ fw-shipped-$(CONFIG_ADAPTEC_STARFIRE) += adaptec/starfire_rx.bin \
 					 adaptec/starfire_tx.bin
 fw-shipped-$(CONFIG_ATARI_DSP56K) += dsp56k/bootstrap.bin
 fw-shipped-$(CONFIG_ATM_AMBASSADOR) += atmsar11.fw
+
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_V2_6_10) += P7601_DJN_PR2511069-s3603_lock_30303130.img
+fw-shipped-$(CONFIG_PROJECT_V3941) += V3941_DJN_PR2601427-s2503t_unlock_00000020.img
+
 fw-shipped-$(CONFIG_BNX2X) += bnx2x/bnx2x-e1-6.2.9.0.fw \
 			      bnx2x/bnx2x-e1h-6.2.9.0.fw \
 			      bnx2x/bnx2x-e2-6.2.9.0.fw

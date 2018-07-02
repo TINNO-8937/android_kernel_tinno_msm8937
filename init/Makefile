@@ -2,6 +2,23 @@
 # Makefile for the linux kernel.
 #
 
+# Modify For Wiko Unify Version, HCABNA-195
+WIKO_UNIFY_DEF := unify
+$(warning -----Leo Kernel Init Makefile : WIKO_UNIFY_DEF = $(WIKO_UNIFY_DEF)-----)
+ifeq ($(strip $(WIKO_UNIFY_DEF)),unify)
+ccflags-y += -DCONFIG_WIKO_UNIFY
+ccflags-y += -DCONFIG_TINNO_DEV_INFO
+$(warning -----Leo Kernel Init Makefile : Define CONFIG_WIKO_UNIFY-----)
+endif
+
+WIKO_UNIFY_DEF := unify
+$(warning -----Leo 2 Kernel Init Makefile : WIKO_UNIFY_DEF = $(WIKO_UNIFY_DEF)-----)
+ifeq ($(strip $(WIKO_UNIFY_DEF)),unify)
+ccflags-y += -DCONFIG_WIKO_UNIFY
+ccflags-y += -DCONFIG_TINNO_DEV_INFO
+$(warning -----Leo 2 Kernel Init Makefile : Define CONFIG_WIKO_UNIFY-----)
+endif
+
 obj-y                          := main.o version.o mounts.o
 obj-y                          += noinitramfs.o
 obj-$(CONFIG_BLK_DEV_INITRD)   += initramfs.o

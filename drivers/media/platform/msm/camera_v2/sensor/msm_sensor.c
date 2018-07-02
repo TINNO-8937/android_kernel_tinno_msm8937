@@ -18,6 +18,8 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
 
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
@@ -108,6 +110,75 @@ int32_t msm_sensor_free_sensor_data(struct msm_sensor_ctrl_t *s_ctrl)
 	return 0;
 }
 
+//BEGIN<20150826><add for dual flash >wangyanhui 
+/*this function only used in leds-msm-gpio-dual-flash.c ,if don't use dual flash,  pls keep below code*/
+int  is_front_camera = 0;
+void msm_sensor_set_front_camera_status(int  status)
+{
+	is_front_camera = status;
+}
+int msm_sensor_is_front_camera(void)
+{
+     return is_front_camera;
+}
+//END<20150826><add for dual flash >wangyanhui 
+
+/*this function only used in leds-msm-gpio-dual-flash.c ,if don't use dual flash,  pls keep below code*/
+int  is_mono_camera = 2;
+void msm_sensor_set_mono_camera_status(int  status)
+{
+	is_mono_camera = status;
+}
+int msm_sensor_is_mono_camera(void)
+{
+     return is_mono_camera;
+}
+//END<20150826><add for dual flash >wangyanhui
+//BEGIN<20170225>liaoshuang add for mipi switch
+#if defined(CONFIG_GPIO_CONTRAL_MIPI_SWITCH)
+unsigned mipi_switch_gpio_oe = 8;
+unsigned mipi_switch_gpio_sel = 9;		
+static int msm_sensor_mipi_switch(struct msm_sensor_ctrl_t *s_ctrl)
+{
+	gpio_request(mipi_switch_gpio_oe,"cam_sw_oe");
+	gpio_request(mipi_switch_gpio_sel,"cam_sw_sel");
+	gpio_direction_output(mipi_switch_gpio_oe, 1);
+	gpio_direction_output(mipi_switch_gpio_sel, 1);
+	if(s_ctrl->id == 1){
+		if(gpio_is_valid(mipi_switch_gpio_oe)) 
+			gpio_set_value(mipi_switch_gpio_oe, 0);
+		else
+			return 0;
+		if(gpio_is_valid(mipi_switch_gpio_sel)) 
+			gpio_set_value(mipi_switch_gpio_sel, 1);	
+		else
+			return 0;
+	}	
+	else if(s_ctrl->id == 2){
+		if(gpio_is_valid(mipi_switch_gpio_oe)) 
+			gpio_set_value(mipi_switch_gpio_oe, 0);
+		else
+			return 0;
+		if(gpio_is_valid(mipi_switch_gpio_sel)) 
+			gpio_set_value(mipi_switch_gpio_sel, 0);	
+		else
+			return 0;	
+	}
+	return 1;
+}
+
+static int msm_sensor_mipi_switch_sleep(struct msm_sensor_ctrl_t *s_ctrl)
+{	
+	if(gpio_is_valid(mipi_switch_gpio_oe)){ 
+		gpio_set_value(mipi_switch_gpio_oe, 1);
+		return 1;
+	}
+	else{
+		return 0;
+	}
+}
+#endif
+//END<20170225>liaoshuang add for mipi switch
 int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	struct msm_camera_power_ctrl_t *power_info;
@@ -119,7 +190,18 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, s_ctrl);
 		return -EINVAL;
 	}
-
+	msm_sensor_set_front_camera_status(0);//LINE<20150826><add for dual flash >wangyanhui 
+	msm_sensor_set_mono_camera_status(2);//LINE<20150826><add for dual flash >wangyanhui 
+	//BEGIN<20170225>liaoshuang add for mipi switch
+	#if defined(CONFIG_GPIO_CONTRAL_MIPI_SWITCH)	
+	if(msm_sensor_mipi_switch_sleep(s_ctrl)){
+		pr_err("GOIO contral mipi switch sleep succrss");
+	}
+	else{
+		pr_err("GOIO contral mipi switch sleep fail");
+	}		
+	#endif
+	//END<20170225>liaoshuang add for mipi switch
 	if (s_ctrl->is_csid_tg_mode)
 		return 0;
 
@@ -169,7 +251,43 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 
 	if (s_ctrl->set_mclk_23880000)
 		msm_sensor_adjust_mclk(power_info);
-
+#if 0	
+	gpio_request(8,"cam_sw_oe");
+	gpio_request(9,"cam_sw_sel");
+	gpio_direction_output(8, 1);
+	gpio_direction_output(9, 1);
+	if(s_ctrl->id == 2){
+		if (gpio_is_valid(8)) {
+			pr_err("l+ls.test.gpio_is_valid(8)11111111111111");
+				gpio_set_value(8, 0);
+		}
+		if (gpio_is_valid(9)) {
+			pr_err("l+ls.test.gpio_is_valid(9)2222222222222222");
+				gpio_set_value(9, 0);	
+		}
+	}
+	else if(s_ctrl->id == 1){
+		if (gpio_is_valid(8)) {
+		pr_err("l+ls.test.gpio_is_valid(8)11111111111111");
+				gpio_set_value(8, 0);
+		}
+		if (gpio_is_valid(9)) {
+		pr_err("l+ls.test.gpio_is_valid(9)2222222222222222");
+				gpio_set_value(9, 1);	
+		}
+	}
+#endif
+	//BEGIN<20170225>liaoshuang add for mipi switch
+	#if defined(CONFIG_GPIO_CONTRAL_MIPI_SWITCH)
+	if(msm_sensor_mipi_switch(s_ctrl)){
+		pr_err("GOIO contral mipi switch succrss,s_ctrl.id = %d,mipi_switch_gpio_oe=%d,cam_sw_sel=%d\n",
+			s_ctrl->id,mipi_switch_gpio_oe,mipi_switch_gpio_sel);
+	}
+	else{
+		pr_err("GOIO contral mipi switch fail,ctrl.id = %d\n",s_ctrl->id);
+	}	
+	#endif
+	//END<20170225>liaoshuang add for mipi switch
 	for (retry = 0; retry < 3; retry++) {
 		rc = msm_camera_power_up(power_info, s_ctrl->sensor_device_type,
 			sensor_i2c_client);
@@ -212,6 +330,19 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int rc = 0;
 	uint16_t chipid = 0;
+    //BEGIN<20160602><add camera otp>wangyanhui add 	
+    #ifdef CONFIG_PROJECT_P7201
+       uint16_t mid = 0;
+       uint16_t flag = 0;
+    #endif
+    //END<20160602><add camera otp>wangyanhui add 	
+    //<BEGIN><make a distinction between ov5670_sunwin and ov5670_cmk ><20170407>;liaoshuang
+    #if 1
+       int addr_mid = 0;
+	uint16_t otp_flag = 0, _mid = 0;
+	uint16_t reg_5002 = 0;
+	#endif
+    //<END><make a distinction between ov5670_sunwin and ov5670_cmk ><20170407>;liaoshuang
 	struct msm_camera_i2c_client *sensor_i2c_client;
 	struct msm_camera_slave_info *slave_info;
 	const char *sensor_name;
@@ -240,8 +371,289 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return rc;
 	}
 
-	pr_debug("%s: read id: 0x%x expected id 0x%x:\n",
+//BEGIN<20160602><add camera otp>wangyanhui add 
+#ifdef CONFIG_PROJECT_P7201
+        pr_err("%s: sensor_name is %s\n", __func__, sensor_name);
+        if((!strncmp(s_ctrl->sensordata->sensor_name, "imx258_guangbao_p7201", sizeof("imx258_guangbao_p7201"))))
+        {
+		unsigned short addr_temp = 0;
+		addr_temp = sensor_i2c_client->cci_client->sid;
+		sensor_i2c_client->cci_client->sid = 0xA0>>1;
+		
+            /* rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+        				sensor_i2c_client, 0x0A02,
+        				0x0F, MSM_CAMERA_I2C_BYTE_DATA);
+             rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+        				sensor_i2c_client, 0x0A00,
+        				0x01, MSM_CAMERA_I2C_BYTE_DATA);
+             msleep(20);
+            rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+        		sensor_i2c_client, 0x0A01,
+        		&flag, MSM_CAMERA_I2C_BYTE_DATA);*/
+            //pr_err("%s: flag is %d  LINE--%d\n", __func__, flag,__LINE__);
+
+            rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+            		sensor_i2c_client, 0x03,
+            		&mid, MSM_CAMERA_I2C_BYTE_DATA);
+            pr_err("%s: mid is   %d \n", __func__ , mid);
+ 
+
+            if(mid == 0x03)
+            		pr_err("mid of camera is imx258_guangbao_p7201\n");
+            else
+            		return -ENODEV;
+
+            /*rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+        				sensor_i2c_client, 0x0A00,
+        				0x00, MSM_CAMERA_I2C_BYTE_DATA);*/
+			
+            sensor_i2c_client->cci_client->sid = addr_temp;
+            msleep(10);
+
+        } 
+
+        if((!strncmp(s_ctrl->sensordata->sensor_name, "imx258_sunny_p7201", sizeof("imx258_sunny_p7201"))))
+        {
+		unsigned short addr_temp = 0;
+		addr_temp = sensor_i2c_client->cci_client->sid;
+		sensor_i2c_client->cci_client->sid = 0xA0 >>1;
+
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+        		sensor_i2c_client, 0x00,
+        		&flag, MSM_CAMERA_I2C_BYTE_DATA);
+			 
+            pr_err("%s: flag is %d  LINE--%d\n", __func__, flag,__LINE__);
+            if(flag == 0x01)
+            {
+
+                rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+            		sensor_i2c_client, 0x01,
+            		&mid, MSM_CAMERA_I2C_BYTE_DATA);
+                pr_err("%s: mid is  %d\n", __func__, mid);
+
+            }
+            else
+            {
+            		return -ENODEV;
+            }
+ 
+
+            if(mid == 0x01)
+                       pr_err("mid of camera is imx258_sunny_p7201 \n");
+            else
+                        return -ENODEV;
+
+            sensor_i2c_client->cci_client->sid = addr_temp;			
+            msleep(10);
+
+        } 		
+#endif
+
+//END<20160602><add camera otp>wangyanhui add 
+
+//BEGIN<20170407><add camera otp>liaoshuang add 
+#if 1
+if((chipid == 0x5670) && (((!strncmp(s_ctrl->sensordata->sensor_name, "ov5670_sunwin_v3941", sizeof("ov5670_sunwin_v3941"))))
+	||(!strncmp(s_ctrl->sensordata->sensor_name, "ov5670_cmk_v3941", sizeof("ov5670_cmk_v3941")))))
+{
+
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x0100,
+			0x01, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+			sensor_i2c_client, 0x5002,
+			&reg_5002, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x5002,
+			(0x00&0x08)|(reg_5002&(~0x08)), MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d84,
+			0xc0, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d88,
+			0x70, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d89,
+			0x10, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d8a,
+			0x70, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d8b,
+			0x29, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x3d81,
+			0x01, MSM_CAMERA_I2C_BYTE_DATA);
+		msleep(10);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+			sensor_i2c_client, 0x7010,
+			&otp_flag, MSM_CAMERA_I2C_BYTE_DATA);
+		msleep(1);
+		pr_err("%s: otp_flag is %d:\n", __func__, otp_flag);
+		if ((otp_flag & 0xc0)== 0x40)
+		{
+			addr_mid = 0x7011; //base address of info group 1
+		}
+		else if ((otp_flag & 0x30)== 0x10)
+		{
+			addr_mid = 0x7016; //base address of info group 2
+		}
+		else if ((otp_flag & 0x0c) == 0x04)
+		{
+			addr_mid = 0x701b; //base address of info group 3
+		}
+		else
+		{
+			return -ENODEV;
+		}
+		pr_err("%s: addr_mid is 0x%x:\n", __func__, addr_mid);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+			sensor_i2c_client, addr_mid,
+			&_mid, MSM_CAMERA_I2C_BYTE_DATA);
+		pr_err("%s: mid is %d:\n", __func__, _mid);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+			sensor_i2c_client, 0x5002,
+			&reg_5002, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x5002,
+			(0x02&0x08)|(reg_5002&(~0x08)), MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(1);
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_write(
+			sensor_i2c_client, 0x0100,
+			0x00, MSM_CAMERA_I2C_BYTE_DATA);
+		mdelay(0);
+		if((!strncmp(s_ctrl->sensordata->sensor_name, "ov5670_sunwin_v3941", sizeof("ov5670_sunwin_v3941"))))
+		{
+			if(_mid == 0x06)
+			{
+				//v3941_match_camera_id=OV5670_SUNWIN;
+				pr_err("ov5670_sunwin Success match =%d\n",_mid);
+			}
+			else
+			{
+				pr_err("ov5670_sunwin NOT match =%d !!!!!!!!!!!!!!!! \n",_mid);
+				return -ENODEV;
+			}
+		}
+		else if((!strncmp(s_ctrl->sensordata->sensor_name, "ov5670_cmk_v3941", sizeof("ov5670_cmk_v3941"))))
+		{
+			if(_mid == 0x08)
+			{
+				//v3941_match_camera_id=OV5670_CMK;
+				pr_err("ov5670_cmk Success match =%d\n",_mid);
+			}
+			else
+			{
+				pr_err("ov5670_cmk NOT match =%d !!!!!!!!!!!!!!!! \n",_mid);
+				return -ENODEV;
+			}
+		}
+}
+//END<20170407><add camera otp>liaoshuang add 
+#endif
+//BEGIN<20170503><add imx376>liaoshuang add 
+#if 1
+	if((chipid == 0x0376) && (!strncmp(s_ctrl->sensordata->sensor_name, "imx376_sunny_p7601", sizeof("imx376_sunny_p7601"))))
+	{
+		unsigned short addr_temp = 0;
+		addr_temp = sensor_i2c_client->cci_client->sid;
+		sensor_i2c_client->cci_client->sid = 0xA0 >>1;
+
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+        		sensor_i2c_client, 0x00,
+        		&otp_flag, MSM_CAMERA_I2C_BYTE_DATA);
+			 
+            pr_err("%s: flag is %d  LINE--%d\n", __func__, otp_flag,__LINE__);
+            if(otp_flag == 0x01)
+            {
+
+                rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+            		sensor_i2c_client, 0x01,
+            		&_mid, MSM_CAMERA_I2C_BYTE_DATA);
+                pr_err("%s: mid is  %d\n", __func__, _mid);
+
+            }
+            else
+            {
+            		return -ENODEV;
+            }
+ 
+
+            if(_mid == 0x01)
+                       pr_err("mid of camera is imx376_sunny_p7601 \n");
+            else
+                        return -ENODEV;
+
+            sensor_i2c_client->cci_client->sid = addr_temp;			
+            msleep(10);
+		
+	}
+	if((chipid == 0x0376) && (!strncmp(s_ctrl->sensordata->sensor_name, "imx376_ofilm_p7601", sizeof("imx376_ofilm_p7601"))))
+		
+	{
+		unsigned short addr_temp = 0;
+		addr_temp = sensor_i2c_client->cci_client->sid;
+		sensor_i2c_client->cci_client->sid = 0xA0 >>1;
+
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+        		sensor_i2c_client, 0x00,
+        		&otp_flag, MSM_CAMERA_I2C_BYTE_DATA);
+			 
+            pr_err("%s: flag is %d  LINE--%d\n", __func__, otp_flag,__LINE__);
+            if(otp_flag == 0x01)
+            {
+
+                rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+            		sensor_i2c_client, 0x0B,
+            		&_mid, MSM_CAMERA_I2C_BYTE_DATA);
+                pr_err("%s: mid is  %d\n", __func__, _mid);
+
+            }
+            else
+            {
+            		return -ENODEV;
+            }
+ 
+
+            if(_mid == 0x11)
+                       pr_err("mid of camera is imx376_ofilm_p7601 \n");
+            else
+                        return -ENODEV;
+
+            sensor_i2c_client->cci_client->sid = addr_temp;			
+            msleep(10);
+		
+	}
+	//END<20170503><add imx376>liaoshuang add 
+#endif
+
+	pr_err("%s: read id: 0x%x expected id 0x%x:\n",
 			__func__, chipid, slave_info->sensor_id);
+    pr_err("%s: xiongdajun add %d\n",
+			__func__, s_ctrl->id);
+      //BEGIN<20150826><add for dual flash >wangyanhui 
+	if(s_ctrl->id == 2)
+	   	msm_sensor_set_front_camera_status(1);
+	else
+	   	msm_sensor_set_front_camera_status(0);
+	//END<20150826><add for dual flash >wangyanhui 
+      //BEGIN<20150826><add for dual flash >wangyanhui 
+	if(s_ctrl->id == 0)
+	   	msm_sensor_set_mono_camera_status(0);
+	else  if(s_ctrl->id == 1)
+	   	msm_sensor_set_mono_camera_status(1);
+	else
+	   	msm_sensor_set_mono_camera_status(2);
+	//END<20150826><add for dual flash >wangyanhui
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("%s chip id %x does not match %x\n",
 				__func__, chipid, slave_info->sensor_id);

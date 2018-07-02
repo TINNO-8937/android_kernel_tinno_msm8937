@@ -518,6 +518,11 @@ struct mmc_host {
 
 	struct dentry		*debugfs_root;
 
+//TINNO BEGIN
+//KBA-170103020323 for emmc verification test
+    bool err_occurred;
+//TINNO END
+
 	struct mmc_async_req	*areq;		/* active async req */
 	struct mmc_context_info	context_info;	/* async synchronization info */
 

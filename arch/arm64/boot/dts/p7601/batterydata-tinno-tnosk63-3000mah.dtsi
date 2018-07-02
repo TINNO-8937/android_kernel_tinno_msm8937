@@ -1,0 +1,49 @@
+
+qcom,batterydata-tinno-tnosk63-3000mah {
+	/* #2882179_Tinno_TNOSK63_3000mAh_averaged_MasterSlave_Apr14th2017*/
+	qcom,max-voltage-uv = <4400000>;
+	qcom,nom-batt-capacity-mah = <3000>;
+	qcom,batt-id-kohm = <100>;
+	qcom,battery-beta = <3435>;
+	qcom,battery-type = "batterydata-tinno-tnosk63-3000mah";
+	qcom,chg-rslow-comp-c1 = <2751488>;
+	qcom,chg-rslow-comp-c2 = <3778203>;
+	qcom,chg-rs-to-rslow = <880817>;
+	qcom,chg-rslow-comp-thr = <0xA2>;
+	qcom,checksum = <0x0F52>;
+	qcom,gui-version = "PMI8950GUI - 2.0.0.16";
+	qcom,fg-profile-data = [
+		 E2 83 EC 7C 
+		 53 81 EA 77 
+		 66 83 1B 75 
+		 DE 89 B3 94 
+		 38 82 7D 98 
+		 DB B5 1E C1 
+		 52 18 07 88 
+		 1A 7E 22 82 
+		 B3 7C 59 83 
+		 5C 61 9F 80 
+		 9C 8C 2D 82 
+		 54 9A A7 BD 
+		 FD CA 5A 0E 
+		 C4 0B 9E 59 
+		 14 70 B2 FD 
+		 FB 35 B7 3E 
+		 DE 2B 00 00 
+		 D4 45 87 30 
+		 3F 21 00 00 
+		 00 00 00 00 
+		 00 00 00 00 
+		 4D 70 89 6B 
+		 03 73 65 8A 
+		 86 74 8A 68 
+		 15 6F B2 71 
+		 A6 6E E5 61 
+		 17 6D B7 A8 
+		 1A A9 62 0E 
+		 65 A0 71 0C 
+		 28 00 FF 36 
+		 F0 11 30 03 
+		 00 00 00 0C 
+	];
+};

@@ -2821,6 +2821,34 @@ struct dentry *mount_subtree(struct vfsmount *mnt, const char *name)
 }
 EXPORT_SYMBOL(mount_subtree);
 
+// TINNO BEGIN
+// WIK_FR_OPEN_PLATFORM_S0063, Shuai.Chen, Modify For Not Root Function
+#ifdef CONFIG_TINNO_ROOT_PROTECT
+int TINNO_ROOT_PROTECT_FLAGS(char *kernel_type, char *kernel_dir)
+{
+	if(kernel_type != NULL	&& kernel_dir != NULL)
+	{
+		if(0 == strcmp(kernel_dir,"/dev/block/bootdevice/by-name/system"))
+		{
+			if(0 == strcmp(kernel_type,"ext5"))
+			{
+				strcpy(kernel_type,"ext4");
+			}
+			else if(strcmp(kernel_type,"ext3") != 0)
+			{
+				return MS_RDONLY;
+			}
+		}
+		else if(0 == strcmp(kernel_type,"ext5"))
+		{
+			strcpy(kernel_type,"ext4");
+		}
+	}
+	return 0;
+}
+#endif
+// TINNO END
+
 SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 		char __user *, type, unsigned long, flags, void __user *, data)
 {
@@ -2842,6 +2870,13 @@ SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 	ret = copy_mount_options(data, &data_page);
 	if (ret < 0)
 		goto out_data;
+
+// TINNO BEGIN
+// WIK_FR_OPEN_PLATFORM_S0063, Shuai.Chen, Modify For Prohibit Root Function
+#ifdef CONFIG_TINNO_ROOT_PROTECT
+	flags |= TINNO_ROOT_PROTECT_FLAGS(kernel_type,kernel_dev);
+#endif
+// TINNO END
 
 	ret = do_mount(kernel_dev, dir_name, kernel_type, flags,
 		(void *) data_page);

@@ -738,7 +738,7 @@ void pm_print_active_wakeup_sources(void)
 	rcu_read_lock();
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		if (ws->active) {
-			pr_info("active wakeup source: %s\n", ws->name);
+			pr_info("Tinno: active wakeup source: %s\n", ws->name);
 			active = 1;
 		} else if (!active &&
 			   (!last_activity_ws ||
@@ -749,7 +749,7 @@ void pm_print_active_wakeup_sources(void)
 	}
 
 	if (!active && last_activity_ws)
-		pr_info("last active wakeup source: %s\n",
+		pr_info("Tinno: last active wakeup source: %s\n",
 			last_activity_ws->name);
 	rcu_read_unlock();
 }

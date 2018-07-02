@@ -5169,8 +5169,25 @@ static struct usb_driver hub_driver = {
 	.supports_autosuspend =	1,
 };
 
+// TINNO BEGIN
+// Shuai.Chen, HCABNA-215, Modify For Wiko Unify Version Sensor Controller
+#ifdef CONFIG_WIKO_UNIFY
+extern int OTG_open;
+#endif
+// TINNO END
+
 int usb_hub_init(void)
 {
+// TINNO BEGIN
+// Shuai.Chen, HCABNA-215, Modify For Wiko Unify Version Sensor Controller
+#ifdef CONFIG_WIKO_UNIFY
+	printk("-----Leo, OTG_open = %d", OTG_open);
+	if(OTG_open == 0) {
+		return 0;
+	}
+#endif
+// TINNO END
+
 	if (usb_register(&hub_driver) < 0) {
 		printk(KERN_ERR "%s: can't register hub driver\n",
 			usbcore_name);

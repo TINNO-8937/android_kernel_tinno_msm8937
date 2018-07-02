@@ -994,7 +994,9 @@ static int _gpiod_direction_output_raw(struct gpio_desc *desc, int value)
 		gpiod_err(desc,
 			  "%s: tried to set a GPIO tied to an IRQ as output\n",
 			  __func__);
-		return -EIO;
+		//{ Comment by Zidong for gt1x driver on kernel 3.18
+		//return -EIO;
+		//}
 	}
 
 	/* Open drain pin should not be driven to 1 */

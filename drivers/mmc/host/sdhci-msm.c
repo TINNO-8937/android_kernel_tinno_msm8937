@@ -236,6 +236,23 @@ enum vdd_io_level {
 	VDD_IO_SET_LEVEL,
 };
 
+// Added by zx 20170422 for recovery mode sdcar detect (start)	
+#if defined(CONFIG_PROJECT_P6901)
+static int not_recovery_mode = 0;
+static __init int recovery_mode_setup(char *s)
+{
+	if(!strcmp(s,"not_recovery_boot_mode")){
+		not_recovery_mode = 1;
+	}
+	
+	return 1;
+}
+__setup("androidboot.recovery=", recovery_mode_setup);
+#endif
+// Added by zx 20170422 for recovery mode sdcar detect (end)	
+
+
+
 /* MSM platform specific tuning */
 static inline int msm_dll_poll_ck_out_en(struct sdhci_host *host,
 						u8 poll)
@@ -1642,6 +1659,16 @@ struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 	}
 
 	pdata->status_gpio = of_get_named_gpio_flags(np, "cd-gpios", 0, &flags);
+// Added by zx 20170422 for recovery mode sdcar detect (start)	
+	#if defined(CONFIG_PROJECT_P6901)
+		#ifdef CONFIG_MMC_DEBUG
+			printk("%s,LINE=%d,%d,flags=%d\n",__func__,__LINE__,pdata->status_gpio,flags);
+			printk("%s--line=%d not_recovery_mode = %d\n",__func__,__LINE__,not_recovery_mode);
+		#endif
+	if(0 == not_recovery_mode)
+		flags = !flags;			 
+	#endif
+// Added by zx 20170422 for recovery mode sdcar detect (end)	
 	if (gpio_is_valid(pdata->status_gpio) & !(flags & OF_GPIO_ACTIVE_LOW))
 		pdata->caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
 

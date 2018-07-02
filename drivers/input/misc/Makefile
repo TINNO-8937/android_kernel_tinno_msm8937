@@ -4,6 +4,16 @@
 
 # Each configuration option enables a list of files.
 
+# TINNO BEGIN
+# Shuai.Chen, HCABNA-215, Modify For Wiko Unify Version Sensor Controller
+WIKO_UNIFY_DEF := $(strip $(subst ro.wiko.type =,,$(shell cat $(PWD)/../../../../build.ini |grep ^ro.wiko.type)))
+$(warning -----Leo Kernel Derive Input Misc Makefile : WIKO_UNIFY_DEF = $(WIKO_UNIFY_DEF)-----)
+ifeq ($(strip $(WIKO_UNIFY_DEF)),unify)
+ccflags-y += -DCONFIG_WIKO_UNIFY
+$(warning -----Leo Kernel Derive Input Misc Makefile : Define CONFIG_WIKO_UNIFY-----)
+endif
+# TINNO END
+
 obj-$(CONFIG_INPUT_88PM860X_ONKEY)	+= 88pm860x_onkey.o
 obj-$(CONFIG_INPUT_88PM80X_ONKEY)	+= 88pm80x_onkey.o
 obj-$(CONFIG_INPUT_AB8500_PONKEY)	+= ab8500-ponkey.o
@@ -71,3 +81,4 @@ obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
+obj-$(CONFIG_HALL_SENSOR)	+= hall_sensor.o

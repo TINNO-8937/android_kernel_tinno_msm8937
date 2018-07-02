@@ -4085,6 +4085,11 @@ static const struct mmc_fixup blk_fixups[] =
 	END_FIXUP
 };
 
+// TINNO BEGIN
+//zhenbo.dong, 20161219, added start for adding flash information in *#0661#
+int emmc_capacity=0;
+//TINNO END
+
 static int mmc_blk_probe(struct mmc_card *card)
 {
 	struct mmc_blk_data *md, *part_md;
@@ -4107,7 +4112,14 @@ static int mmc_blk_probe(struct mmc_card *card)
 	pr_info("%s: %s %s %s %s\n",
 		md->disk->disk_name, mmc_card_id(card), mmc_card_name(card),
 		cap_str, md->read_only ? "(ro)" : "");
-
+	// TINNO BEGIN
+	//zhenbo.dong, 20161219, added start for adding flash information in *#0661#
+	if(emmc_capacity ==0)
+		emmc_capacity = get_capacity(md->disk);
+	printk("%s: %s %s %s %s  %d\n",
+		md->disk->disk_name, mmc_card_id(card), mmc_card_name(card),
+		cap_str, md->read_only ? "(ro)" : "", emmc_capacity);
+	//TINNO END
 	if (mmc_blk_alloc_parts(card, md))
 		goto out;
 

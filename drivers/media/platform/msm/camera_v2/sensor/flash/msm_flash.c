@@ -20,7 +20,7 @@
 #include "msm_cci.h"
 
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 DEFINE_MSM_MUTEX(msm_flash_mutex);
 
@@ -500,7 +500,8 @@ static int32_t msm_flash_init(
 	CDBG("Exit");
 	return 0;
 }
-
+//xiongdajun add front/near flash
+extern int msm_sensor_is_front_camera(void);
 static int32_t msm_flash_low(
 	struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
@@ -522,14 +523,37 @@ static int32_t msm_flash_low(
 				flash_data->flash_current[i] <
 				max_current) {
 				curr = flash_data->flash_current[i];
+				CDBG("low_flash_current[%d]= %d", i, curr);
 			} else {
 				curr = flash_ctrl->torch_op_current[i];
 				pr_debug("LED current clamped to %d\n",
 					curr);
+					CDBG("low_flash_current[%d]= %d", i, curr);
 			}
 			CDBG("low_flash_current[%d] = %d", i, curr);
-			led_trigger_event(flash_ctrl->torch_trigger[i],
+                //begin xiongdajun add front/near flash
+                    #if defined (CONFIG_LEDS_MSM_GPIO_DUAL_FLASH)
+                      if((msm_sensor_is_front_camera()||flash_data->camera_id == 1))//LINE<20160601>wangyanhui add for cts test
+    			    led_trigger_event(flash_ctrl->torch_trigger[1],
+    				curr);
+                        else
+                            led_trigger_event(flash_ctrl->torch_trigger[0],
+    				curr);
+			//BEGIN<20160601>wangyanhui add for front flash 			
+			#elif defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+
+	                      if((msm_sensor_is_front_camera()||flash_data->camera_id == 1))
+	    			    led_trigger_event(flash_ctrl->torch_trigger[2],
+	    				curr);
+	                        else if(i < 2)
+	                            led_trigger_event(flash_ctrl->torch_trigger[i],
+	    				curr);
+			//END<20160601>wangyanhui add for front flash				
+                    #else
+                    led_trigger_event(flash_ctrl->torch_trigger[i],
 				curr);
+                    #endif
+                  //endxiongdajun add front/near flash
 		}
 	}
 	if (flash_ctrl->switch_trigger)
@@ -565,8 +589,28 @@ static int32_t msm_flash_high(
 					i, curr);
 			}
 			CDBG("high_flash_current[%d] = %d", i, curr);
-			led_trigger_event(flash_ctrl->flash_trigger[i],
-				curr);
+                    //begin xiongdajun add front/near flash
+                    #if defined CONFIG_LEDS_MSM_GPIO_DUAL_FLASH
+                        if((msm_sensor_is_front_camera()|| flash_data->camera_id == 1))//LINE<20160601>wangyanhui add for cts test
+            			led_trigger_event(flash_ctrl->flash_trigger[1],
+            				curr);
+                        else
+                                led_trigger_event(flash_ctrl->flash_trigger[0],
+            				curr);
+			//BEGIN<20160601>wangyanhui add for front flash 			
+			#elif defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+                        if((msm_sensor_is_front_camera()|| flash_data->camera_id == 1))
+            			led_trigger_event(flash_ctrl->flash_trigger[2],
+            				curr);
+                        else if(i < 2)
+                                led_trigger_event(flash_ctrl->flash_trigger[i],
+            				curr);
+			//END<20160601>wangyanhui add for front flash 			
+                     #else
+                        led_trigger_event(flash_ctrl->flash_trigger[i],
+        				curr);
+                     #endif
+                     //end xiongdajun add front/near flash
 		}
 	}
 	if (flash_ctrl->switch_trigger)
@@ -915,14 +959,6 @@ static int32_t msm_flash_get_dt_data(struct device_node *of_node,
 		fctrl->flash_driver_type = FLASH_DRIVER_I2C;
 	}
 
-	/* Read the flash and torch source info from device tree node */
-	rc = msm_flash_get_pmic_source_info(of_node, fctrl);
-	if (rc < 0) {
-		pr_err("%s:%d msm_flash_get_pmic_source_info failed rc %d\n",
-			__func__, __LINE__, rc);
-		return rc;
-	}
-
 	/* Read the gpio information from device tree */
 	rc = msm_sensor_driver_get_gpio_data(
 		&(fctrl->power_info.gpio_conf), of_node);
@@ -932,11 +968,21 @@ static int32_t msm_flash_get_dt_data(struct device_node *of_node,
 		return rc;
 	}
 
+#if (defined CONFIG_PROJECT_P7701)||(defined CONFIG_PROJECT_P7705)||(defined CONFIG_PROJECT_P7201)||(defined CONFIG_PROJECT_P7203) ||(defined CONFIG_PROJECT_V3941) //MYOSC-710.前后闪光灯都设置为长亮，切换前后置摄像头，有时前置闪光灯不亮.wupingzhou,20160611.
+#else
 	if (fctrl->flash_driver_type == FLASH_DRIVER_DEFAULT)
 		fctrl->flash_driver_type = FLASH_DRIVER_GPIO;
+#endif
 	CDBG("%s:%d fctrl->flash_driver_type = %d", __func__, __LINE__,
 		fctrl->flash_driver_type);
 
+	/* Read the flash and torch source info from device tree node */
+	rc = msm_flash_get_pmic_source_info(of_node, fctrl);
+	if (rc < 0) {
+		pr_err("%s:%d msm_flash_get_pmic_source_info failed rc %d\n",
+			__func__, __LINE__, rc);
+		return rc;
+	}
 	return rc;
 }
 
@@ -964,10 +1010,19 @@ static long msm_flash_subdev_do_ioctl(
 	u32 = (struct msm_flash_cfg_data_t32 *)arg;
 
 	flash_data.cfg_type = u32->cfg_type;
+	flash_data.camera_id = u32->camera_id;//LINE<20160601>wangyanhui add for cts test
 	for (i = 0; i < MAX_LED_TRIGGERS; i++) {
 		flash_data.flash_current[i] = u32->flash_current[i];
 		flash_data.flash_duration[i] = u32->flash_duration[i];
 	}
+	
+	//BEGIN<20160601>wangyanhui add for front flash 
+	#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+		flash_data.flash_current[MAX_LED_TRIGGERS - 1] = flash_data.flash_current[MAX_LED_TRIGGERS - 2];
+		flash_data.flash_duration[MAX_LED_TRIGGERS - 1] = flash_data.flash_duration[MAX_LED_TRIGGERS - 2];
+	#endif
+	//END<20160601>wangyanhui add for front flash
+	
 	switch (cmd) {
 	case VIDIOC_MSM_FLASH_CFG32:
 		cmd = VIDIOC_MSM_FLASH_CFG;

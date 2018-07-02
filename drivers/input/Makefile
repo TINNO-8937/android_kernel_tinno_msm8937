@@ -28,3 +28,10 @@ obj-$(CONFIG_INPUT_APMPOWER)	+= apm-power.o
 obj-$(CONFIG_INPUT_KEYRESET)	+= keyreset.o
 obj-$(CONFIG_INPUT_KEYCOMBO)	+= keycombo.o
 
+#TINNO BEGIN
+# guomingyi add for fingerprint start.
+include $(PWD)/vendor/tinno/Fingerprint-N/kernel_macro_cfg
+ifneq ($(strip $(TINNO_FINGERPRINT_SUPPORT)),)
+obj-y += ../../$(kernel_fp_source_dir)/
+endif
+#TINNO END

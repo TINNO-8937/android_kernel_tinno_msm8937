@@ -55,6 +55,17 @@ static void __iomem *msm_ps_hold;
 static phys_addr_t tcsr_boot_misc_detect;
 static void scm_disable_sdi(void);
 
+//zenghaihui forbid download mode for 7201 DCC
+#ifdef __BUILD_TYPE_USER__
+
+#if defined(CONFIG_PROJECT_P7201)
+static int download_mode = 0;
+#else
+static int download_mode = 1;
+#endif
+
+#else  /* __BUILD_TYPE_USER__ */
+
 #ifdef CONFIG_MSM_DLOAD_MODE
 /* Runtime could be only changed value once.
 * There is no API from TZ to re-enable the registers.
@@ -64,6 +75,8 @@ static int download_mode = 1;
 #else
 static const int download_mode;
 #endif
+
+#endif /* __BUILD_TYPE_USER__ */
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"

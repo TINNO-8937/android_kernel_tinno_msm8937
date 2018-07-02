@@ -29,6 +29,11 @@ static int32_t msm_sensor_driver_platform_probe(struct platform_device *pdev);
 
 /* Static declaration */
 static struct msm_sensor_ctrl_t *g_sctrl[MAX_CAMERAS];
+ 
+#ifdef CONFIG_DEV_INFO
+extern void store_camera_info(const char *const sensor_name, const char *const eeprom_name);
+#endif
+//BEGIN<20170225>liaoshuang add for mipi switch
 
 static int msm_sensor_platform_remove(struct platform_device *pdev)
 {
@@ -768,12 +773,18 @@ int32_t msm_sensor_driver_probe(void *setting,
 		if (slave_info->sensor_id_info.sensor_id ==
 			s_ctrl->sensordata->cam_slave_info->
 				sensor_id_info.sensor_id) {
+		//Begin;HCABM-348;add sensor name compare;xiongdajun
+		if(!strncmp(slave_info->sensor_name, s_ctrl->sensordata->cam_slave_info->sensor_name,
+                strlen(slave_info->sensor_name))){
+		pr_err("add compare sensor name %s \n",s_ctrl->sensordata->cam_slave_info->sensor_name);
 			pr_err("slot%d: sensor id%d already probed\n",
 				slave_info->camera_id,
 				s_ctrl->sensordata->cam_slave_info->
 					sensor_id_info.sensor_id);
 			msm_sensor_fill_sensor_info(s_ctrl,
 				probed_info, entity_name);
+		}
+            //END;HCABM-348;add sensor name compare;xiongdajun
 		} else
 			pr_err("slot %d has some other sensor\n",
 				slave_info->camera_id);
@@ -895,6 +906,9 @@ CSID_TG:
 	}
 
 	pr_err("%s probe succeeded", slave_info->sensor_name);
+#ifdef CONFIG_DEV_INFO    
+        store_camera_info(slave_info->sensor_name, s_ctrl->sensordata->eeprom_name);
+#endif
 
 	/*
 	  Set probe succeeded flag to 1 so that no other camera shall
@@ -1062,6 +1076,48 @@ static int32_t msm_sensor_driver_get_dt_data(struct msm_sensor_ctrl_t *s_ctrl)
 		sensordata->sensor_info->modes_supported = CAMERA_MODE_INVALID;
 	}
 	/* Get vdd-cx regulator */
+	//BEGIN<20170225>liaoshuang add for mipi switch
+#if 0//defined(CONFIG_GPIO_CONTRAL_MIPI_SWITCH)
+	mipi_switch_gpio_oe = of_get_named_gpio(of_node,
+			"qcom,mipi_switch_gpio_oe", 0);
+	if (gpio_is_valid(mipi_switch_gpio_oe)) { 
+		rc = gpio_request(mipi_switch_gpio_oe,
+				"mipi_switch_gpio_oe");
+		if (rc) {
+			pr_err("mipi_switch_gpio_oe request fail \n");
+			gpio_free(mipi_switch_gpio_oe);
+			//return -EINVAL;
+		}
+
+		rc = gpio_direction_output(mipi_switch_gpio_oe, 1);
+		if (rc) {
+			pr_err("mipi_switch_gpio_oe set dir fail \n");
+			gpio_free(mipi_switch_gpio_oe);
+			//return -EINVAL;
+		}
+		gpio_set_value(mipi_switch_gpio_oe, 0);
+	}
+	mipi_switch_gpio_sel = of_get_named_gpio(of_node,
+			"qcom,mipi_switch_gpio_sel", 0);
+	if (gpio_is_valid(mipi_switch_gpio_sel)) { 
+		rc = gpio_request(mipi_switch_gpio_sel,
+				"mipi_switch_gpio_sel");
+		if (rc) {
+			pr_err("mipi_switch_gpio_sel request fail \n");
+			gpio_free(mipi_switch_gpio_sel);
+			//return -EINVAL;
+		}
+
+		rc = gpio_direction_output(mipi_switch_gpio_sel, 1);
+		if (rc) {
+			pr_err("mipi_switch_gpio_sel set dir fail \n");
+			gpio_free(mipi_switch_gpio_sel);
+			//return -EINVAL;
+		}
+		gpio_set_value(mipi_switch_gpio_sel, 0);
+	}
+#endif
+     //END<20170225>liaoshuang add for mipi switch
 	/*Optional property, don't return error if absent */
 	of_property_read_string(of_node, "qcom,vdd-cx-name",
 		&sensordata->misc_regulator);

@@ -43,6 +43,7 @@ static struct of_device_id msm_match_table[] = {
 	{}
 };
 
+static unsigned int nc_gpio;
 MODULE_DEVICE_TABLE(of, msm_match_table);
 
 #define MAX_BUFFER_SIZE			(320)
@@ -632,6 +633,7 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	r = of_property_read_string(np, "qcom,clk-src", &pdata->clk_src_name);
 
 	pdata->clkreq_gpio = of_get_named_gpio(np, "qcom,nq-clkreq", 0);
+	nc_gpio = of_get_named_gpio(np, "qcom,nq-nc", 0);
 
 	if (r)
 		return -EINVAL;
@@ -827,6 +829,25 @@ static int nqx_probe(struct i2c_client *client,
 		goto err_ese_gpio;
 	}
 
+	//yixuhong 20170428 add,below code only use for tinno i9051 project,set pm8953 gpio8 as input mode
+	if (gpio_is_valid(nc_gpio)) {
+		r = gpio_request(nc_gpio,"not_connect_gpio");
+		if (r) {
+			dev_err(&client->dev,
+				"%s: unable to request not connect gpio [%d]\n",
+				__func__, nc_gpio);
+		}
+		r = gpio_direction_input(nc_gpio);
+		if (r) {
+			dev_err(&client->dev,
+			"%s: cannot set direction for not connect gpio [%d]\n",
+			__func__, platform_data->clkreq_gpio);
+		}
+	} else {
+		dev_err(&client->dev,
+			"%s: warning,please check your project dts\n", __func__);
+	}
+	
 	nqx_dev->en_gpio = platform_data->en_gpio;
 	nqx_dev->irq_gpio = platform_data->irq_gpio;
 	nqx_dev->firm_gpio  = platform_data->firm_gpio;

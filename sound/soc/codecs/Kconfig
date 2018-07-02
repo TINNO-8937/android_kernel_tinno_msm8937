@@ -872,4 +872,15 @@ config SND_SOC_MSM_HDMI_CODEC_RX
 config SND_SOC_MSM_HDMI_DBA_CODEC_RX
 	bool "HDMI DBA Audio Playback"
 	depends on MSM_DBA
+
+#yangliang add for smartpa 20161007	
+source "sound/soc/codecs/tfa/Kconfig"
+source "sound/soc/codecs/tfa9896/Kconfig"
+#add AW87319 PA  liuweiwei
+config SND_SOC_AW87319
+	tristate "Build AW87319 PA drivers"
+	depends on I2C
+	default n
+	help
+	AW87319 PA kernel driver
 endmenu

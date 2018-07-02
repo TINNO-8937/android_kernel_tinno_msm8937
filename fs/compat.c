@@ -821,6 +821,13 @@ COMPAT_SYSCALL_DEFINE5(mount, const char __user *, dev_name,
 		}
 	}
 
+// TINNO BEGIN
+// WIK_FR_OPEN_PLATFORM_S0063, Shuai.Chen, Modify For Prohibit Root Function
+#ifdef CONFIG_TINNO_ROOT_PROTECT
+	flags |= TINNO_ROOT_PROTECT_FLAGS(kernel_type, kernel_dev);
+#endif
+// TINNO END
+
 	retval = do_mount(kernel_dev, dir_name, kernel_type,
 			flags, (void*)data_page);
 

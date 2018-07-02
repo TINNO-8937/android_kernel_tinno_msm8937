@@ -207,6 +207,10 @@ source "drivers/input/touchscreen/Kconfig"
 
 source "drivers/input/misc/Kconfig"
 
+#TINNO BEGIN, add by wenguangyu, for fingerprint
+source "drivers/input/fingerprint/Kconfig"
+#TINNO END, add by wenguangyu, for fingerprint
+
 endif
 
 menu "Hardware I/O ports"

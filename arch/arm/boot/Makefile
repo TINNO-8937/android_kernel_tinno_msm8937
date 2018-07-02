@@ -13,7 +13,7 @@
 
 include $(srctree)/arch/arm/boot/dts/Makefile
 
-include $(srctree)/arch/arm/boot/dts/Makefile
+include $(srctree)/arch/arm/boot/dts/v3941_32/Makefile
 ifneq ($(DTSSUBDIR),)
 DTSSUBDIR_INCS=$(foreach DIR, $(DTSSUBDIR), $(addsuffix /Makefile, $(addprefix $(srctree)/arch/arm/boot/dts/, $(DIR))))
 include $(DTSSUBDIR_INCS)
@@ -30,14 +30,31 @@ INITRD_PHYS := $(initrd_phys-y)
 export ZRELADDR INITRD_PHYS PARAMS_PHYS
 
 targets := Image zImage xipImage bootpImage uImage
+DTS_CUSTOM_DIR := qcom
+ifeq ($(CONFIG_PROJECT_V3941),y)
+DTS_CUSTOM_DIR := v3941_32
+endif
+
+
+
+#include $(srctree)/arch/arm64/boot/dts/qcom/Makefile
+include $(srctree)/arch/arm/boot/dts/$(DTS_CUSTOM_DIR)/Makefile
+
 
 DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM_APPENDED_DTB_IMAGE_NAMES))
+
+
 ifneq ($(DTB_NAMES),)
 DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
+DTB_OBJS := $(addprefix $(obj)/dts/,$(DTB_LIST))
 else
-DTB_LIST := $(dtb-y)
+DTB_OBJS := $(shell find $(obj)/dts/ -name \*.dtb)
 endif
-DTB_OBJS := $(addprefix $(obj)/dts/qcom/,$(DTB_LIST))
+
+
+
+
+
 
 ifeq ($(CONFIG_XIP_KERNEL),y)
 
@@ -66,6 +83,8 @@ $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 $(obj)/zImage:	$(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 	@$(kecho) '  Kernel: $@ is ready'
+
+
 
 $(obj)/zImage-dtb:	$(obj)/zImage $(DTB_OBJS) FORCE
 	$(call if_changed,cat)

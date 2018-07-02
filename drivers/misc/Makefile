@@ -68,3 +68,15 @@ obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
 obj-$(CONFIG_USB_EXT_TYPE_C_PERICOM)	+= type-c-pericom.o
 obj-$(CONFIG_USB_EXT_TYPE_C_TI)		+= type-c-ti.o
 obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
+
+obj-$(CONFIG_DEV_INFO)	+= dev_info.o
+
+# TINNO BEGIN
+# Shuai.Chen, Modify For Wiko Unify Version, HCABNA-195
+WIKO_UNIFY_DEF := $(strip $(subst ro.wiko.type =,,$(shell cat $(PWD)/build.ini |grep ^ro.wiko.type)))
+ifeq ($(strip $(WIKO_UNIFY_DEF)),unify)
+obj-$(CONFIG_TINNO_DEV_INFO)       += tinno_dev_info.o
+obj-y	+= sensor_state.o
+endif
+# TINNO END
+obj-$(CONFIG_TINNO_KE_DBUG)       += tinno_kernel_debug.o

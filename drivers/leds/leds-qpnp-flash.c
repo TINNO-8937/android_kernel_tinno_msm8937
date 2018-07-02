@@ -30,6 +30,12 @@
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
 
+//BEGIN<20160601>wangyanhui add for front flash	
+#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)	
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
+#endif
+//END<20160601>wangyanhui add for front flash	
 #define FLASH_LED_PERIPHERAL_SUBTYPE(base)			(base + 0x05)
 #define FLASH_SAFETY_TIMER(base)				(base + 0x40)
 #define FLASH_MAX_CURRENT(base)					(base + 0x41)
@@ -131,6 +137,8 @@
 #define FLASH_SUBTYPE_DUAL					0x01
 #define FLASH_SUBTYPE_SINGLE					0x02
 
+//jiangwei begin
+#define CAMERA_BOOT_FTM_MODE "androidboot.mode=ffbm-01"
 /*
  * ID represents physical LEDs for individual control purpose.
  */
@@ -138,6 +146,11 @@ enum flash_led_id {
 	FLASH_LED_0 = 0,
 	FLASH_LED_1,
 	FLASH_LED_SWITCH,
+//BEGIN<20160601>wangyanhui add for front flash	
+#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)	
+	FLASH_LED_FRONT,
+#endif
+//END<20160601>wangyanhui add for front flash
 };
 
 enum flash_led_type {
@@ -219,6 +232,12 @@ struct flash_led_platform_data {
 	bool				mask3_en;
 	bool				follow_rb_disable;
 	bool				die_current_derate_en;
+//BEGIN<20160601>wangyanhui add for front flash
+#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+	unsigned front_flash_gpio_mode;
+	unsigned front_flash_gpio_en;	
+#endif
+//END<20160601>wangyanhui add for front flash
 };
 
 struct qpnp_flash_led_buffer {
@@ -1230,7 +1249,8 @@ error_regulator_enable:
 
 	return rc;
 }
-
+extern int msm_sensor_is_front_camera(void);
+extern int msm_sensor_is_mono_camera(void);
 static void qpnp_flash_led_work(struct work_struct *work)
 {
 	struct flash_node_data *flash_node = container_of(work,
@@ -1238,7 +1258,7 @@ static void qpnp_flash_led_work(struct work_struct *work)
 	struct qpnp_flash_led *led =
 			dev_get_drvdata(&flash_node->spmi_dev->dev);
 	union power_supply_propval psy_prop;
-	int rc, brightness;
+	int rc, brightness = flash_node->cdev.brightness;
 	int max_curr_avail_ma = 0;
 	int total_curr_ma = 0;
 	int i;
@@ -1247,16 +1267,59 @@ static void qpnp_flash_led_work(struct work_struct *work)
 	/* Global lock is to synchronize between the flash leds and torch */
 	mutex_lock(&led->flash_led_lock);
 	/* Local lock is to synchronize for one led instance */
-	mutex_lock(&flash_node->cdev.led_access);
 
-	brightness = flash_node->cdev.brightness;
+//BEGIN<20160601>wangyanhui add for front flash
+#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+	if (flash_node->id == FLASH_LED_FRONT) 
+	{
+		if (!brightness)
+		{
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en)) 
+				gpio_set_value(led->pdata->front_flash_gpio_en, 0);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode)) 
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 0);		
+			flash_node->flash_on = false;
+			mutex_unlock(&led->flash_led_lock);
+			return;
+		}
+		if (flash_node->type == TORCH)	
+		{	
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en)) 
+				gpio_set_value(led->pdata->front_flash_gpio_en, 1);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode)) 
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 0);				
+		}
+		else
+		{
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en)) 
+				gpio_set_value(led->pdata->front_flash_gpio_en, 1);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode)) 
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 1);				
+		}	
+		flash_node->flash_on = true;
+		mutex_unlock(&led->flash_led_lock);
+		return;
+	}
+#endif
+//END<20160601>wangyanhui add for front flash
 	if (!brightness)
 		goto turn_off;
 
+//BEGIN<20160525><modify for front camera>xiongdajun
+	#if (defined(CONFIG_PROJECT_P7701))||(defined(CONFIG_PROJECT_P7705))||(defined(CONFIG_PROJECT_V3941))
+	if ((led->open_fault)&&msm_sensor_is_front_camera()) {
+		dev_err(&led->spmi_dev->dev, "Open fault detected\n");
+		mutex_unlock(&led->flash_led_lock);
+		return;
+	}
+	#else
 	if (led->open_fault) {
 		dev_err(&led->spmi_dev->dev, "Open fault detected\n");
-		goto unlock_mutex;
+		mutex_unlock(&led->flash_led_lock);
+		return;
 	}
+	#endif
+//End<20160525><modify for front camera>xiongdajun
 
 	if (!flash_node->flash_on && flash_node->num_regulators > 0) {
 		rc = flash_regulator_enable(led, flash_node, true);
@@ -1333,6 +1396,26 @@ static void qpnp_flash_led_work(struct work_struct *work)
 		}
 
 		if (flash_node->id == FLASH_LED_SWITCH) {
+                    if(flash_node->prgm_current)
+                        flash_node->prgm_current = 150;
+           //maye begin
+	    #if  defined(CONFIG_PROJECT_P7601)
+		if(flash_node->prgm_current)
+		    flash_node->prgm_current = 150;
+	    #endif
+	    //maye end
+           //jiangwei begin
+           #if defined(CONFIG_PROJECT_P7201) 
+                    if(flash_node->prgm_current)
+                        flash_node->prgm_current = 150;
+           #endif
+           //jiangwei end
+          //BEGIN<20170408><modify torch current>liaoshuang add 
+           #if defined(CONFIG_PROJECT_V3941) 
+                    if(flash_node->prgm_current)
+                        flash_node->prgm_current = 100;
+           #endif
+           //END<20170408><modify torch current>liaoshuang add 
 			val = (u8)(flash_node->prgm_current *
 						FLASH_TORCH_MAX_LEVEL
 						/ flash_node->max_current);
@@ -1344,7 +1427,24 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					"Torch reg write failed\n");
 				goto exit_flash_led_work;
 			}
-
+	           //maye begin
+		    #if  defined(CONFIG_PROJECT_P7601)
+					if(flash_node->prgm_current2)
+					    flash_node->prgm_current2 = 150;
+		    #endif
+		    //maye end
+	           //jiangwei begin
+	           #if defined(CONFIG_PROJECT_P7201) 
+	                    if(flash_node->prgm_current2)
+	                        flash_node->prgm_current2 = 150;
+	           #endif
+	           //jiangwei end
+	      	    //BEGIN<20170408><modify torch current>liaoshuang add 
+           		#if defined(CONFIG_PROJECT_V3941) 
+                    if(flash_node->prgm_current2)
+                        flash_node->prgm_current2 = 100;
+           		#endif
+           	     //END<20170408><modify torch current>liaoshuang add 
 			val = (u8)(flash_node->prgm_current2 *
 						FLASH_TORCH_MAX_LEVEL
 						/ flash_node->max_current);
@@ -1530,6 +1630,24 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					max_curr_avail_ma) / total_curr_ma;
 			}
 
+		    //jiangwei begin
+		    #if  defined(CONFIG_PROJECT_P7201)
+					if(flash_node->prgm_current)
+					    flash_node->prgm_current = 750;
+		    #endif
+		    //jiangwei end
+	           //maye begin
+		    #if  defined(CONFIG_PROJECT_P7601)
+					if(flash_node->prgm_current)
+					    flash_node->prgm_current = 750;
+		    #endif
+		    //maye end
+		    //BEGIN<20170408><modify flashlight current>liaoshuang add 
+		    #if  defined(CONFIG_PROJECT_V3941)
+					if(flash_node->prgm_current)
+					    flash_node->prgm_current = 488;
+		    #endif
+		    //END<20170408><modify flashlight current>liaoshuang add 
 			val = (u8)(flash_node->prgm_current *
 				FLASH_MAX_LEVEL / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1539,7 +1657,24 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					"Current register write failed\n");
 				goto exit_flash_led_work;
 			}
-
+	           //maye begin
+		    #if  defined(CONFIG_PROJECT_P7601)
+					if(flash_node->prgm_current2)
+					    flash_node->prgm_current2 = 750;
+		    #endif
+		    //maye end
+		    //jiangwei begin
+		    #if  defined(CONFIG_PROJECT_P7201)
+					if(flash_node->prgm_current2)
+					    flash_node->prgm_current2 = 750;
+		    #endif
+		    //jiangwei end                    //END xiongdajun modify flash current
+		     //BEGIN<20170408><modify flashlight current>liaoshuang add 
+		    #if  defined(CONFIG_PROJECT_V3941)
+					if(flash_node->prgm_current2)
+					    flash_node->prgm_current2 = 488;
+		    #endif
+		    //END<20170408><modify flashlight current>liaoshuang add 
 			val = (u8)(flash_node->prgm_current2 *
 				FLASH_MAX_LEVEL / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1739,7 +1874,9 @@ turn_off:
 			goto exit_flash_led_work;
 		}
 
+#if (defined(CONFIG_PROJECT_P7701))||(defined(CONFIG_PROJECT_P7705))||(defined(CONFIG_PROJECT_V3941))  
 		led->open_fault |= (val & FLASH_LED_OPEN_FAULT_DETECTED);
+#endif
 	}
 
 	rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1832,6 +1969,24 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 					 flash_node->id == FLASH_LED_1) {
 			if (value < FLASH_LED_MIN_CURRENT_MA && value != 0)
 				value = FLASH_LED_MIN_CURRENT_MA;
+			#if defined(CONFIG_PROJECT_V3941)
+			#else
+			//jiangwei begin
+			if ((strstr(saved_command_line, CAMERA_BOOT_FTM_MODE))&&(msm_sensor_is_mono_camera() == 0)&&(flash_node->id == FLASH_LED_0))
+			{
+			    pr_err("ftm mode bayer sensor led0 current zero\n");
+
+			    return;;
+			}
+
+			if ((strstr(saved_command_line, CAMERA_BOOT_FTM_MODE))&&(msm_sensor_is_mono_camera() == 1)&&(flash_node->id == FLASH_LED_1))
+			{
+			    pr_err("ftm mode mono sensor leds current zero\n");
+
+			    return;;
+			}
+			//jiangwei end
+			#endif
 
 			flash_node->prgm_current = value;
 			flash_node->flash_on = value ? true : false;
@@ -2420,6 +2575,49 @@ static int qpnp_flash_led_parse_common_dt(
 			return PTR_ERR(led->gpio_state_suspend);
 		}
 	}
+//BEGIN<20160601>wangyanhui add for front flash
+#if defined(CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH)
+	led->pdata->front_flash_gpio_mode = of_get_named_gpio(node,
+			"qcom,front_flash_gpio_mode", 0);
+	if (gpio_is_valid(led->pdata->front_flash_gpio_mode)) {
+		rc = gpio_request(led->pdata->front_flash_gpio_mode,
+				"front_flash_gpio_mode");
+		if (rc) {
+			pr_err("front_flash_gpio_mode request fail \n");
+			gpio_free(led->pdata->front_flash_gpio_mode);
+			return -EINVAL;
+		}
+
+		rc = gpio_direction_output(led->pdata->front_flash_gpio_mode, 1);
+		if (rc) {
+			pr_err("front_flash_gpio_mode set dir fail \n");
+			gpio_free(led->pdata->front_flash_gpio_mode);
+			return -EINVAL;
+		}
+		gpio_set_value(led->pdata->front_flash_gpio_mode, 0);
+	}
+	
+	led->pdata->front_flash_gpio_en = of_get_named_gpio(node,
+			"qcom,front_flash_gpio_en", 0);	
+	if (gpio_is_valid(led->pdata->front_flash_gpio_en)) {
+		rc = gpio_request(led->pdata->front_flash_gpio_en,
+				"front_flash_gpio_en");
+		if (rc) {
+			pr_err("front_flash_gpio_en request fail \n");
+			gpio_free(led->pdata->front_flash_gpio_en);
+			return -EINVAL;
+		}
+
+		rc = gpio_direction_output(led->pdata->front_flash_gpio_en, 1);
+		if (rc) {
+			pr_err("front_flash_gpio_en set dir fail \n");
+			gpio_free(led->pdata->front_flash_gpio_en);
+			return -EINVAL;
+		}
+		gpio_set_value(led->pdata->front_flash_gpio_en, 0);
+	}
+#endif
+//END<20160601>wangyanhui add for front flash
 
 	return 0;
 }
