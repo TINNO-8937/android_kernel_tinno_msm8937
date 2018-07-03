@@ -784,6 +784,11 @@ config ARCH_HAS_CACHE_LINE_SIZE
 
 source "mm/Kconfig"
 
+config PROJECT_P7201
+	bool "P7201 project support"
+	help
+	  This option enables support project name
+
 config SECCOMP
 	bool "Enable seccomp to safely compute untrusted bytecode"
 	---help---
