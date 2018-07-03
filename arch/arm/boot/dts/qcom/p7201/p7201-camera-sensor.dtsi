@@ -1,0 +1,146 @@
+/*
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&cci {
+
+	eeprom0: qcom,eeprom@0 {
+		/delete-property/ cam_vana-supply;
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio","cam_vaf";
+		qcom,cam-vreg-min-voltage = <1200000 1800000 2850000>;
+		qcom,cam-vreg-max-voltage = <1200000 1800000 2850000>;
+		qcom,cam-vreg-op-mode = <200000 80000 100000>;
+		gpios = <&tlmm 26 0>,
+			<&tlmm 36 0>,
+			<&tlmm 35 0>,
+			<&tlmm 125 0>;
+		qcom,gpio-vana = <3>;
+		qcom,gpio-req-tbl-num = <0 1 2 3>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0>;
+		qcom,gpio-req-tbl-label = "CAMIF_MCLK0",
+			"CAM_RESET0",
+			"CAM_STANDBY0",
+			"CAM_VANA";
+	};
+
+	eeprom1: qcom,eeprom@1 {
+		/delete-property/ qcom,eeprom-name;
+		/delete-property/ qcom,slave-addr;
+		/delete-property/ qcom,num-blocks;
+		/delete-property/ qcom,page0;
+		/delete-property/ qcom,poll0;
+		/delete-property/ qcom,mem0;
+		/delete-property/ qcom,page1;
+		/delete-property/ qcom,poll1;
+		/delete-property/ qcom,mem1;
+		/delete-property/ qcom,page2;
+		/delete-property/ qcom,poll2;
+		/delete-property/ qcom,mem2;
+		/delete-property/ qcom,page3;
+		/delete-property/ qcom,poll3;
+		/delete-property/ qcom,mem3;
+		/delete-property/ qcom,page4;
+		/delete-property/ qcom,poll4;
+		/delete-property/ qcom,mem4;
+		/delete-property/ qcom,page5;
+		/delete-property/ qcom,poll5;
+		/delete-property/ qcom,mem5;
+		/delete-property/ qcom,page6;
+		/delete-property/ qcom,poll6;
+		/delete-property/ qcom,mem6;
+		/delete-property/ qcom,page7;
+		/delete-property/ qcom,poll7;
+		/delete-property/ qcom,mem7;
+		/delete-property/ cam_vana-supply;
+		/delete-property/ cam_vaf-supply;
+		cam_vdig-supply = <&pm8937_l23>;
+		cam_vio-supply = <&pm8937_l6>;
+        qcom,cam-vreg-type = <0 0>;
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio";
+		qcom,cam-vreg-min-voltage = <1200000 1800000>;
+		qcom,cam-vreg-max-voltage = <1200000 1800000>;
+		qcom,cam-vreg-op-mode = <200000 0>;
+		gpios = <&tlmm 28 0>,
+			<&tlmm 40 0>,
+			<&tlmm 39 0>,
+			<&tlmm 125 0>;
+		qcom,gpio-vana = <3>;
+		qcom,gpio-req-tbl-num = <0 1 2 3>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0>;
+		qcom,gpio-req-tbl-label = "CAMIF_MCLK2",
+					  "CAM_RESET2",
+					  "CAM_STANDBY2",
+					  "CAM_VANA";
+		qcom,cam-power-seq-type = "sensor_vreg", "sensor_vreg",
+			"sensor_gpio", "sensor_gpio", "sensor_gpio" , "sensor_clk";
+		qcom,cam-power-seq-val = "cam_vdig", "cam_vio",
+			"sensor_gpio_reset", "sensor_gpio_standby","sensor_gpio_vana",
+			"sensor_cam_mclk";
+		qcom,cam-power-seq-delay = <1 1 30 30 30 5>;
+	};
+
+	qcom,camera@0 {
+		qcom,mount-angle = <90>;
+		/delete-property/cam_vana-supply;
+		cam_vdig-supply = <&pm8937_l23>;
+		cam_vio-supply = <&pm8937_l6>;
+		cam_vaf-supply = <&pm8937_l17>;
+		qcom,cam-vreg-name = "cam_vio","cam_vdig","cam_vaf";
+		qcom,cam-vreg-type = <0 0 0>;
+		qcom,cam-vreg-min-voltage = <1800000 1200000 2850000>;
+		qcom,cam-vreg-max-voltage = <1800000 2800000 2950000>;
+		pinctrl-0 = <&cam_sensor_mclk0_default
+				&cam_sensor_rear_default
+				&cam_sensor_rear_vana>;
+		pinctrl-1 = <&cam_sensor_mclk0_sleep &cam_sensor_rear_sleep
+				&cam_sensor_rear_vana_sleep>;
+		gpios = <&tlmm 26 0>,
+			<&tlmm 36 0>,
+			<&tlmm 35 0>,
+			<&tlmm 125 0>;
+		/delete-property/ qcom,gpio-vdig;
+		qcom,gpio-vana = <3>;
+		qcom,gpio-req-tbl-num = <0 1 2 3>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0>;
+		qcom,gpio-req-tbl-label = "CAMIF_MCLK0",
+			"CAM_RESET0",
+			"CAM_STANDBY0",
+			"CAM_VANA0";
+	};
+
+	/delete-node/ qcom,camera@1;
+
+	qcom,camera@2 {
+		qcom,mount-angle = <270>;
+		qcom,led-flash-src = <&led_flash0>;
+        cam_vdig-supply = <&pm8937_l23>;
+		cam_vio-supply = <&pm8937_l6>;
+        /delete-property/ cam_vana-supply;
+        /delete-property/ cam_vaf-supply;
+		qcom,cam-vreg-type = <0 0>;
+		qcom,cam-vreg-name = "cam_vdig", "cam_vio";
+		qcom,cam-vreg-min-voltage = <1200000 1800000>;
+		qcom,cam-vreg-max-voltage = <1200000 1800000>;
+		qcom,cam-vreg-op-mode = <200000 0>;
+		gpios = <&tlmm 28 0>,
+			<&tlmm 40 0>,
+			<&tlmm 39 0>,
+			<&tlmm 125 0>;
+		qcom,gpio-vana = <3>;
+		qcom,gpio-req-tbl-num = <0 1 2 3>;
+		qcom,gpio-req-tbl-flags = <1 0 0 0>;
+		qcom,gpio-req-tbl-label = "CAMIF_MCLK2",
+					  "CAM_RESET2",
+					  "CAM_STANDBY2",
+					  "CAM_VANA2";
+	};
+};
