@@ -90,6 +90,7 @@
 
 	qcom,camera@0 {
 		qcom,mount-angle = <90>;
+		qcom,led-flash-src = <&led_flash0>;
 		/delete-property/cam_vana-supply;
 		cam_vdig-supply = <&pm8937_l23>;
 		cam_vio-supply = <&pm8937_l6>;

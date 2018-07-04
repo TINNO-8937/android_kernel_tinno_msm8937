@@ -17,3 +17,11 @@
 	qcom,msm-spk-ext-pa = <&tlmm 126 0>;
 	qcom,msm-spk-ext-pa-compatible = <&tlmm 89 0>;
 };
+
+&wsa881x_i2c_e {
+	status = "disabled";
+};
+
+&wsa881x_i2c_f {
+	status = "disabled";
+};
