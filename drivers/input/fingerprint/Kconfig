@@ -1,0 +1,50 @@
+#
+# fingerprint driver configuration
+#
+
+config TINNO_FINGERPRINT_SUPPORT
+	string "TINNO_FINGERPRINT_SUPPORT"
+	help
+	  Kernel space image fingerprint driver. 
+
+config FINGERPRINT_CHIPONE_7152_QSEE
+  bool FINGERPRINT_CHIPONE_7152_QSEE
+  default n
+  help
+    Chipone Fingerprint QSEE for chip 7152
+
+config FINGERPRINT_ELAN_96SA
+  bool FINGERPRINT_ELAN_96SA
+  default n
+  help
+    Elan Fingerprint 96SA
+
+config FINGERPRINT_ELAN_519C
+  bool FINGERPRINT_ELAN_519C
+  default n
+  help
+    Elan Fingerprint 519C
+
+config FINGERPRINT_GOODIX_GF316M
+  bool FINGERPRINT_GOODIX_GF316M
+  default n
+  help
+    Goodix Fingerprint chip GF316M/GF516M/GF318M/
+
+config FINGERPRINT_GOODIX_3208_QSEE
+  bool FINGERPRINT_GOODIX_3208_QSEE
+  default n
+  help
+    Goodix Fingerprint QSEE for chip 3208
+
+config FINGERPRINT_GOODIX_GF5216
+  bool FINGERPRINT_GOODIX_GF5216
+  default n
+  help
+    Goodix Fingerprint chip GF5216
+
+config FINGERPRINT_SILHEAD_6163
+  bool FINGERPRINT_SILHEAD_6163
+  default n
+  help
+    Silhead Fingerprint chip 6163
