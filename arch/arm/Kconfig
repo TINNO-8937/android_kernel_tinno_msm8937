@@ -2284,3 +2284,19 @@ endif
 source "lib/Kconfig"
 
 source "arch/arm/kvm/Kconfig"
+
+
+config PLATFORM_TINNO
+	tristate "Tinno Platform"
+	help
+	  Tells whether it is a tinno device or not
+
+config PROJECT_GARLIC
+	tristate "project support"
+	help
+	  This option enables support project name
+
+config PROJECT_WIMLITE
+	tristate "project support"
+	help
+	  This option enables support project name
