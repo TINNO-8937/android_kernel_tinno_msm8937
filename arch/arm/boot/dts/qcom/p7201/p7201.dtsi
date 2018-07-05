@@ -103,9 +103,12 @@
 		vio-supply = <&pm8937_l6>;
 		reg = <0 0>;
 		interrupt-parent = <&tlmm>;
-		interrupts = <17 0x1>;
-		qcom,irq-gpio = <&tlmm 17 0x00>;
-		qcom,reset-gpio = <&tlmm 19 0x00>;
+		interrupts = <17 1>;
+		qcom,irq-gpio = <&tlmm 17 0>;
+		qcom,fpid-gpio = <&tlmm 16 0>;
+		qcom,reset-gpio = <&tlmm 19 0>;
+		pinctrl-names = "tlmm_gpio_fpid_active";
+		pinctrl-0 = <&gpio_fpid_active>;
 		spi-max-frequency = <8000000>;
 	};
 };
@@ -160,16 +163,19 @@
 
 &spi_6 {
     qcom_fp@0 {
-        status = "ok";
-        compatible = "qcom,fingerprint";
-        vdd-supply = <&pm8937_l10>;
-        vio-supply = <&pm8937_l6>;
-        reg = <0>;
-        interrupt-parent = <&tlmm>;
-        interrupts = <17 0x1>;
-        qcom,irq-gpio = <&tlmm 17 0x00>;
-        qcom,reset-gpio = <&tlmm 19 0x00>;
-        spi-max-frequency = <8000000>;
+		status = "ok";
+		compatible = "qcom,fingerprint";
+		vdd-supply = <&pm8937_l10>;
+		vio-supply = <&pm8937_l6>;
+		reg = <0 0>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <17 1>;
+		qcom,irq-gpio = <&tlmm 17 0>;
+		qcom,fpid-gpio = <&tlmm 16 0>;
+		qcom,reset-gpio = <&tlmm 19 0>;
+		pinctrl-names = "tlmm_gpio_fpid_active";
+		pinctrl-0 = <&gpio_fpid_active>;
+		spi-max-frequency = <8000000>;
     };
 };
 
