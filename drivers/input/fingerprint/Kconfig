@@ -3,7 +3,7 @@
 #
 
 config TINNO_FINGERPRINT_SUPPORT
-	string "TINNO_FINGERPRINT_SUPPORT"
+	bool "TINNO_FINGERPRINT_SUPPORT"
 	help
 	  Kernel space image fingerprint driver. 
 
