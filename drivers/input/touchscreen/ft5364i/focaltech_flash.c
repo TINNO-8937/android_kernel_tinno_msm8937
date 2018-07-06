@@ -118,14 +118,12 @@ static unsigned char *CTPM_FW = NULL;
 int yeji_fw_size,be_fw_size;
 
 static unsigned char CTPM_FW_BE[] = {
-#include "BE_FT5346I_WIMLITE_V13_D01_20161221_app.i"
+#include "BE_FT5346I_P6901_V13_D01_20161221_app.i"
 };
 
-#ifdef(CONFIG_PROJECT_WIMLITE)
 static unsigned char CTPM_FW_YEJI[] = {
-#include "YEJI_FT5346I_WIMLITE_V17_D01_20170518_app.i"
+#include "YEJI_FT5346I_P6901_V17_D01_20170518_app.i"
 };
-#endif
 
 
 static unsigned char aucFW_PRAM_BOOT[] = {
