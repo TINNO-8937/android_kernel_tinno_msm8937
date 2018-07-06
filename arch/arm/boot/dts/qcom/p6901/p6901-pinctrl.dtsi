@@ -65,7 +65,7 @@
 				pins = "gpio85", "gpio88","gpio86";
 			};
 			config {
-				pins = "gpio85", "gpio88";
+				pins = "gpio85", "gpio88","gpio86";
 			};
 		};
 		pri_tlmm_lines_sus {
