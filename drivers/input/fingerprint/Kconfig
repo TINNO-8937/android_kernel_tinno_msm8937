@@ -19,12 +19,6 @@ config FINGERPRINT_ELAN_96SA
   help
     Elan Fingerprint 96SA
 
-config FINGERPRINT_ELAN_519C
-  bool FINGERPRINT_ELAN_519C
-  default n
-  help
-    Elan Fingerprint 519C
-
 config FINGERPRINT_GOODIX_GF316M
   bool FINGERPRINT_GOODIX_GF316M
   default n
