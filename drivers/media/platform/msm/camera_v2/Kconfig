@@ -250,3 +250,10 @@ config LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
 
 	  To compile this driver as a module, choose M here: the module will
 	  be called leds-gpio-flash.
+
+config CAMERA_VOLT_BY_USERSPACE
+	tristate "Camera Voltage Set By Userspace"
+	help
+	  This driver supports the camera voltage set by userspace. 
+	  To compile this driver as a module, choose M here: the module will
+	  be called msm_sensor.

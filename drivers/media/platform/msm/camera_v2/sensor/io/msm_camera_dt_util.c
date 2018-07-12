@@ -1503,12 +1503,27 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 				goto power_up_failed;
 			}
 			if (power_setting->seq_val < ctrl->num_vreg)
+			#ifdef CONFIG_CAMERA_VOLT_BY_USERSPACE
+			{
+			if ((strcmp(ctrl->cam_vreg[power_setting->seq_val].reg_name,"cam_vaf") == 0) &&
+							power_setting->config_val >= 2800000 && power_setting->config_val <= 2975000) {
+					pr_err("befor-max_voltage=%d,min_voltage=%d,config_val=%ld\n",
+					ctrl->cam_vreg[power_setting->seq_val].max_voltage,ctrl->cam_vreg[power_setting->seq_val].min_voltage,power_setting->config_val);
+					ctrl->cam_vreg[power_setting->seq_val].max_voltage = power_setting->config_val;
+					ctrl->cam_vreg[power_setting->seq_val].min_voltage = power_setting->config_val;
+					pr_err("after-max_voltage=%d,min_voltage=%d,config_val=%ld\n",
+					ctrl->cam_vreg[power_setting->seq_val].max_voltage,ctrl->cam_vreg[power_setting->seq_val].min_voltage,power_setting->config_val);
+				}
+			#endif
 				msm_camera_config_single_vreg(ctrl->dev,
 					&ctrl->cam_vreg
 					[power_setting->seq_val],
 					(struct regulator **)
 					&power_setting->data[0],
 					1);
+			#ifdef CONFIG_CAMERA_VOLT_BY_USERSPACE
+			}
+			#endif
 			else
 				pr_err("%s: %d usr_idx:%d dts_idx:%d\n",
 					__func__, __LINE__,
