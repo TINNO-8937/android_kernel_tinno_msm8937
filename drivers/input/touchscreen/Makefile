@@ -95,3 +95,4 @@ obj-$(CONFIG_TOUCHSCREEN_FTS)		+= focaltech_touch/
 obj-$(CONFIG_TOUCHSCREEN_FTS_TINNO) 	+= focaltech_touch_tinno/
 obj-$(CONFIG_TOUCHSCREEN_FT5364I)	+= ft5364i/
 obj-$(CONFIG_TOUCHSCREEN_FT5XX)		+= ft5xx/
+obj-$(CONFIG_TP_TGESTURE)		+= tgesture/
