@@ -123,6 +123,9 @@ enum msm_usb_phy_type {
 #define IDEV_CHG_MAX	1500
 #define IUNIT		100
 #define IDEV_HVDCP_CHG_MAX	1800
+#ifdef CONFIG_PLATFORM_V12BN
+#define IDEV_CHG_MAX_TINNO 500
+#endif
 
 /**
  * Different states involved in USB charger detection.
@@ -348,6 +351,7 @@ struct msm_otg_platform_data {
 	bool enable_sdp_typec_current_limit;
 	bool vbus_low_as_hostmode;
 	enum floated_chg_type enable_floated_charger;
+	bool enable_sdp_typec_current_limit;
 };
 
 /* phy related flags */
