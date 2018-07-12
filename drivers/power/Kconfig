@@ -496,6 +496,30 @@ config QPNP_CHARGER
 	  also offers relevant information to userspace via the power supply
 	  framework.
 
+config TINNO_CHARGER_CONFIG
+        bool "Tinno charger config"
+        default n
+	help
+          Say Y here to enable tinno battery charger config.
+
+config TINNO_BATTERY_FEATURE
+        bool "Tinno battery feature config"
+        default n
+	help
+          Say Y here to enable tinno battery feature config.
+
+config TINNO_CHECK_LOWBAT_CAP
+	bool "Tinno battery low high current discharger feature config"
+        default n
+	help
+          Say Y here to enable tinno battery low high current discharger feature config.
+          
+config TINNO_BATTERY_CMD_DEBUG
+        bool "Tinno battery command debug config"
+        default n
+	help
+          Say Y here to enable tinno battery feature config.
+
 config QPNP_SMBCHARGER
 	tristate "QPNP SMB Charger driver"
 	depends on SPMI || MSM_SPMI
@@ -535,6 +559,14 @@ config QPNP_FG
 	  battery fuel gauging and state of charge of battery connected to the
 	  fuel gauge. The state of charge is reported through a BMS power
 	  supply property and also sends uevents when the capacity is updated.
+
+config TINNO_BATTERY_FG_HEART
+	tristate "TINNO battery FG heart config for debug"
+	depends on SPMI || MSM_SPMI
+	depends on OF_SPMI
+	help
+	 Say Y here to enable support for tinno battery heart update for charger debug
+	 PMIC chips.
 
 config QPNP_FG_GEN3
 	tristate "QPNP GEN3 fuel gauge driver"
@@ -637,6 +669,26 @@ config MSM_BCL_PERIPHERAL_CTL
 	  PMIC peripheral.
 
 source "drivers/power/reset/Kconfig"
+
+config SMART_CHARGING_CONTROL
+	bool "smart charing"
+	default n	
+	help
+	  Say Y here to enable smart charging control driver. 
+
+config CUSTOM_PARALLEL_ICL
+	bool "Custom parallel ICL"
+	depends on QPNP_SMBCHARGER
+	default n
+	help
+	  Say Y here to enable custom parallel ICL. 
+
+config JEITA_FLOAT_VOLTAGE_ADJ
+	bool "Change jeita float voltage"
+	depends on QPNP_SMBCHARGER
+	default n
+	help
+	  Say Y here to enable changing the jeita float voltage. 
 
 endif # POWER_SUPPLY
 

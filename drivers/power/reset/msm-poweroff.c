@@ -409,6 +409,14 @@ static void do_msm_poweroff(void)
 	return;
 }
 
+#ifdef CONFIG_TINNO_BATTERY_FEATURE
+void do_kernel_power_off(void)
+{
+	do_msm_poweroff();
+}
+EXPORT_SYMBOL_GPL(do_kernel_power_off);
+#endif
+
 #ifdef CONFIG_MSM_DLOAD_MODE
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
