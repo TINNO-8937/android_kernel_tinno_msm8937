@@ -31,6 +31,10 @@
 #include <linux/uaccess.h>
 #include "leds.h"
 
+#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
+#endif
 #define FLASH_LED_PERIPHERAL_SUBTYPE(base)			(base + 0x05)
 #define FLASH_SAFETY_TIMER(base)				(base + 0x40)
 #define FLASH_MAX_CURRENT(base)					(base + 0x41)
@@ -133,6 +137,9 @@
 #define FLASH_SUBTYPE_DUAL					0x01
 #define FLASH_SUBTYPE_SINGLE					0x02
 
+#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+#define CAMERA_BOOT_FTM_MODE "androidboot.mode=ffbm-01"
+#endif
 /*
  * ID represents physical LEDs for individual control purpose.
  */
@@ -140,6 +147,9 @@ enum flash_led_id {
 	FLASH_LED_0 = 0,
 	FLASH_LED_1,
 	FLASH_LED_SWITCH,
+	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+	FLASH_LED_FRONT,
+	#endif
 };
 
 enum flash_led_type {
@@ -222,6 +232,10 @@ struct flash_led_platform_data {
 	bool				mask3_en;
 	bool				follow_rb_disable;
 	bool				die_current_derate_en;
+	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+	unsigned			front_flash_gpio_mode;
+	unsigned			front_flash_gpio_en;
+	#endif
 };
 
 struct qpnp_flash_led_buffer {
@@ -1295,15 +1309,22 @@ out:
 	mutex_unlock(&led->flash_led_lock);
 	return rc;
 }
-
+#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+extern int msm_sensor_is_front_camera(void);
+extern int msm_sensor_is_mono_camera(void);
+#endif
 static void qpnp_flash_led_work(struct work_struct *work)
 {
 	struct flash_node_data *flash_node = container_of(work,
-				struct flash_node_data, work);
+	                                     struct flash_node_data, work);
 	struct qpnp_flash_led *led =
-			dev_get_drvdata(&flash_node->spmi_dev->dev);
+	    dev_get_drvdata(&flash_node->spmi_dev->dev);
 	union power_supply_propval psy_prop;
+	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+	int rc, brightness = flash_node->cdev.brightness;
+	#else
 	int rc, brightness;
+	#endif
 	int max_curr_avail_ma = 0;
 	int total_curr_ma = 0;
 	int i;
@@ -1312,9 +1333,40 @@ static void qpnp_flash_led_work(struct work_struct *work)
 	/* Global lock is to synchronize between the flash leds and torch */
 	mutex_lock(&led->flash_led_lock);
 	/* Local lock is to synchronize for one led instance */
+#ifndef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
 	mutex_lock(&flash_node->cdev.led_access);
 
 	brightness = flash_node->cdev.brightness;
+#endif
+
+	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+	if (flash_node->id == FLASH_LED_FRONT) {
+		if (!brightness) {
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en))
+				gpio_set_value(led->pdata->front_flash_gpio_en, 0);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode))
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 0);
+			flash_node->flash_on = false;
+			mutex_unlock(&led->flash_led_lock);
+			return;
+		}
+		if (flash_node->type == TORCH) {
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en))
+				gpio_set_value(led->pdata->front_flash_gpio_en, 1);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode))
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 0);
+		} else {
+			if (gpio_is_valid(led->pdata->front_flash_gpio_en))
+				gpio_set_value(led->pdata->front_flash_gpio_en, 1);
+			if (gpio_is_valid(led->pdata->front_flash_gpio_mode))
+				gpio_set_value(led->pdata->front_flash_gpio_mode, 1);
+		}
+		flash_node->flash_on = true;
+		mutex_unlock(&led->flash_led_lock);
+		return;
+	}
+	#endif
+
 	if (!brightness)
 		goto turn_off;
 
@@ -1341,7 +1393,11 @@ static void qpnp_flash_led_work(struct work_struct *work)
 		led->open_fault = (val & FLASH_LED_OPEN_FAULT_DETECTED);
 		if (led->open_fault) {
 			dev_err(&led->spmi_dev->dev, "Open fault detected\n");
-			goto unlock_mutex;
+			#ifndef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+			mutex_unlock(&flash_node->cdev.led_access);
+			#endif
+			mutex_unlock(&led->flash_led_lock);
+			return;
 		}
 	}
 
@@ -1420,18 +1476,29 @@ static void qpnp_flash_led_work(struct work_struct *work)
 		}
 
 		if (flash_node->id == FLASH_LED_SWITCH) {
+			#if defined(CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE) || defined(CONFIG_PROJECT_HS2)
+			if(flash_node->prgm_current)
+				flash_node->prgm_current = 150;
+			#endif
 			val = (u8)(flash_node->prgm_current *
-						FLASH_TORCH_MAX_LEVEL
-						/ flash_node->max_current);
+			           FLASH_TORCH_MAX_LEVEL
+			           / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
-						led->current_addr,
-						FLASH_CURRENT_MASK, val);
+			                           led->current_addr,
+			                           FLASH_CURRENT_MASK, val);
 			if (rc) {
 				dev_err(&led->spmi_dev->dev,
-					"Torch reg write failed\n");
+				        "Torch reg write failed\n");
 				goto exit_flash_led_work;
 			}
-
+			#ifdef CONFIG_PROJECT_GARLIC
+			if(flash_node->prgm_current2)
+				flash_node->prgm_current2 = 150;
+			#endif
+			#ifdef CONFIG_PROJECT_HS2
+			if(flash_node->prgm_current2)
+				flash_node->prgm_current2 = 100;
+			#endif
 			val = (u8)(flash_node->prgm_current2 *
 						FLASH_TORCH_MAX_LEVEL
 						/ flash_node->max_current);
@@ -1617,6 +1684,14 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					max_curr_avail_ma) / total_curr_ma;
 			}
 
+			#ifdef CONFIG_PROJECT_GARLIC
+			if(flash_node->prgm_current)
+				flash_node->prgm_current = 750;
+			#endif
+			#ifdef CONFIG_PROJECT_HS2
+			if (flash_node->prgm_current)
+				flash_node->prgm_current = 1000;
+			#endif
 			val = (u8)(flash_node->prgm_current *
 				FLASH_MAX_LEVEL / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1626,7 +1701,14 @@ static void qpnp_flash_led_work(struct work_struct *work)
 					"Current register write failed\n");
 				goto exit_flash_led_work;
 			}
-
+			#ifdef CONFIG_PROJECT_GARLIC
+			if(flash_node->prgm_current2)
+				flash_node->prgm_current2 = 750;
+			#endif
+			#ifdef CONFIG_PROJECT_HS2
+			if(flash_node->prgm_current2)
+				flash_node->prgm_current2 = 150;
+			#endif
 			val = (u8)(flash_node->prgm_current2 *
 				FLASH_MAX_LEVEL / flash_node->max_current);
 			rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1825,8 +1907,9 @@ turn_off:
 				"Failed to read out fault status register\n");
 			goto exit_flash_led_work;
 		}
-
+		#ifndef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
 		led->open_fault = (val & FLASH_LED_OPEN_FAULT_DETECTED);
+		#endif
 	}
 
 	rc = qpnp_led_masked_write(led->spmi_dev,
@@ -1919,6 +2002,19 @@ static void qpnp_flash_led_brightness_set(struct led_classdev *led_cdev,
 					 flash_node->id == FLASH_LED_1) {
 			if (value < FLASH_LED_MIN_CURRENT_MA && value != 0)
 				value = FLASH_LED_MIN_CURRENT_MA;
+			#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+			if ((strstr(saved_command_line, CAMERA_BOOT_FTM_MODE)) 
+				&& (msm_sensor_is_mono_camera() == 0) && (flash_node->id == FLASH_LED_0)) {
+				pr_err("ftm mode bayer sensor led0 current zero\n");
+				return;;
+			}
+
+			if ((strstr(saved_command_line, CAMERA_BOOT_FTM_MODE))
+				&& (msm_sensor_is_mono_camera() == 1) && (flash_node->id == FLASH_LED_1)) {
+				pr_err("ftm mode mono sensor leds current zero\n");
+				return;;
+			}
+			#endif
 
 			flash_node->prgm_current = value;
 			flash_node->flash_on = value ? true : false;
@@ -2507,6 +2603,47 @@ static int qpnp_flash_led_parse_common_dt(
 			return PTR_ERR(led->gpio_state_suspend);
 		}
 	}
+	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
+	led->pdata->front_flash_gpio_mode = of_get_named_gpio(node,
+	                                    "qcom,front_flash_gpio_mode", 0);
+	if (gpio_is_valid(led->pdata->front_flash_gpio_mode)) {
+		rc = gpio_request(led->pdata->front_flash_gpio_mode,
+		                  "front_flash_gpio_mode");
+		if (rc) {
+			pr_err("front_flash_gpio_mode request fail \n");
+			gpio_free(led->pdata->front_flash_gpio_mode);
+			return -EINVAL;
+		}
+
+		rc = gpio_direction_output(led->pdata->front_flash_gpio_mode, 1);
+		if (rc) {
+			pr_err("front_flash_gpio_mode set dir fail \n");
+			gpio_free(led->pdata->front_flash_gpio_mode);
+			return -EINVAL;
+		}
+		gpio_set_value(led->pdata->front_flash_gpio_mode, 0);
+	}
+
+	led->pdata->front_flash_gpio_en = of_get_named_gpio(node,
+	                                  "qcom,front_flash_gpio_en", 0);
+	if (gpio_is_valid(led->pdata->front_flash_gpio_en)) {
+		rc = gpio_request(led->pdata->front_flash_gpio_en,
+		                  "front_flash_gpio_en");
+		if (rc) {
+			pr_err("front_flash_gpio_en request fail \n");
+			gpio_free(led->pdata->front_flash_gpio_en);
+			return -EINVAL;
+		}
+
+		rc = gpio_direction_output(led->pdata->front_flash_gpio_en, 1);
+		if (rc) {
+			pr_err("front_flash_gpio_en set dir fail \n");
+			gpio_free(led->pdata->front_flash_gpio_en);
+			return -EINVAL;
+		}
+		gpio_set_value(led->pdata->front_flash_gpio_en, 0);
+	}
+	#endif
 
 	return 0;
 }
