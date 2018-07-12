@@ -14,10 +14,14 @@
 &int_codec {
 	/delete-property/ qcom,cdc-us-euro-gpios;
   qcom,msm-spk-ext-pa-mode = <3>;
+	qcom,msm-spk-ext-pa = <&tlmm 48 0>;
+	qcom,msm-spk-ext-pa-compatible = <&tlmm 89 0>;
 
   qcom,tinno_mbhc_keycode = <226 115 114 0 0 0 0 0>;
   qcom,tinno_mbhc_btn_high = <110 300 480 500 500>;
   qcom,tinno_mbhc_btn_low = <110 300 480 500 500>;
+	qcom,msm-mbhc-hphl-swh = <1>;
+	qcom,msm-hs-micbias-type = "internal";
  
 	qcom,msm-gpios =
 		"pri_i2s",
@@ -94,4 +98,12 @@
 
 	asoc-codec = <&stub_codec>, <&hdmi_dba>;
 	asoc-codec-names = "msm-stub-codec.1", "msm-hdmi-dba-codec-rx";
+};
+
+&wsa881x_i2c_e {
+	status = "okay";
+};
+
+&wsa881x_i2c_44 {
+	status = "okay";
 };
