@@ -77,3 +77,9 @@ config MIPI_DSI_TC358762_DSI2DPI
 	tristate "Toshiba DSI to DPI Bridge"
 	depends on FB_MSM_MDSS
 	default n
+
+config GPIO_TINNO_LCD_LDO
+    bool "lcd vdd ldo Support"
+    default n
+    ---help---
+      Support the lcd gpio for vdd ldo
