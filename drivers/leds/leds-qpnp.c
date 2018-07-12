@@ -904,22 +904,33 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 			}
 		}
 		if (led->mpp_cfg->pwm_mode == PWM_MODE) {
+			#ifdef CONFIG_PLATFORM_TINNO
+			if(led->cdev.brightness > 250) {
+				rc = pwm_config(
+				         led->mpp_cfg->pwm_cfg->pwm_dev,
+				         1000000,
+				         1000000);
+			} else {
+			#endif
 			/*config pwm for brightness scaling*/
 			period_us = led->mpp_cfg->pwm_cfg->pwm_period_us;
 			if (period_us > INT_MAX / NSEC_PER_USEC) {
 				duty_us = (period_us * led->cdev.brightness) /
-					LED_FULL;
+				          LED_FULL;
 				rc = pwm_config_us(
-					led->mpp_cfg->pwm_cfg->pwm_dev,
-					duty_us,
-					period_us);
+				         led->mpp_cfg->pwm_cfg->pwm_dev,
+				         duty_us,
+				         period_us);
 			} else {
 				duty_ns = ((period_us * NSEC_PER_USEC) /
-					LED_FULL) * led->cdev.brightness;
+				           LED_FULL) * led->cdev.brightness;
 				rc = pwm_config(
-					led->mpp_cfg->pwm_cfg->pwm_dev,
-					duty_ns,
-					period_us * NSEC_PER_USEC);
+				         led->mpp_cfg->pwm_cfg->pwm_dev,
+				         duty_ns,
+				         period_us * NSEC_PER_USEC);
+				#ifdef CONFIG_PLATFORM_TINNO
+			}
+				#endif
 			}
 			if (rc < 0) {
 				dev_err(&led->spmi_dev->dev, "Failed to " \
@@ -975,7 +986,7 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 					"Failed to write led enable " \
 					"reg\n");
 			goto err_mpp_reg_write;
-		}
+		}	
 	} else {
 		if (led->mpp_cfg->pwm_mode != MANUAL_MODE) {
 			led->mpp_cfg->pwm_cfg->mode =
@@ -2612,6 +2623,11 @@ restore:
 static void led_blink(struct qpnp_led_data *led,
 			struct pwm_config_data *pwm_cfg)
 {
+	#ifdef CONFIG_PLATFORM_TINNO
+	if(led->cdev.brightness>0)
+		led->cdev.brightness = 102;
+	qpnp_mpp_set(led);
+	#else
 	int rc;
 
 	flush_work(&led->work);
@@ -2631,29 +2647,30 @@ static void led_blink(struct qpnp_led_data *led,
 				led->mpp_cfg->pwm_mode = pwm_cfg->default_mode;
 			else if (led->id == QPNP_ID_KPDBL)
 				led->kpdbl_cfg->pwm_mode =
-						pwm_cfg->default_mode;
+				    pwm_cfg->default_mode;
 		}
 		pwm_free(pwm_cfg->pwm_dev);
 		qpnp_pwm_init(pwm_cfg, led->spmi_dev, led->cdev.name);
 		if (led->id == QPNP_ID_RGB_RED || led->id == QPNP_ID_RGB_GREEN
-				|| led->id == QPNP_ID_RGB_BLUE) {
+		    || led->id == QPNP_ID_RGB_BLUE) {
 			rc = qpnp_rgb_set(led);
 			if (rc < 0)
 				dev_err(&led->spmi_dev->dev,
-				"RGB set brightness failed (%d)\n", rc);
+				        "RGB set brightness failed (%d)\n", rc);
 		} else if (led->id == QPNP_ID_LED_MPP) {
 			rc = qpnp_mpp_set(led);
 			if (rc < 0)
 				dev_err(&led->spmi_dev->dev,
-				"MPP set brightness failed (%d)\n", rc);
+				        "MPP set brightness failed (%d)\n", rc);
 		} else if (led->id == QPNP_ID_KPDBL) {
 			rc = qpnp_kpdbl_set(led);
 			if (rc < 0)
 				dev_err(&led->spmi_dev->dev,
-				"KPDBL set brightness failed (%d)\n", rc);
+				        "KPDBL set brightness failed (%d)\n", rc);
 		}
 	}
 	mutex_unlock(&led->lock);
+	#endif
 }
 
 static ssize_t blink_store(struct device *dev,
@@ -3430,7 +3447,11 @@ static int qpnp_get_config_pwm(struct pwm_config_data *pwm_cfg,
 	pwm_cfg->use_blink =
 		of_property_read_bool(node, "qcom,use-blink");
 
+	#ifdef CONFIG_PLATFORM_TINNO
+	if (pwm_cfg->mode == LPG_MODE) {
+	#else
 	if (pwm_cfg->mode == LPG_MODE || pwm_cfg->use_blink) {
+	#endif
 		pwm_cfg->duty_cycles =
 			devm_kzalloc(&spmi_dev->dev,
 			sizeof(struct pwm_duty_cycles), GFP_KERNEL);
