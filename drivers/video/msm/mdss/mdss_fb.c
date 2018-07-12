@@ -275,6 +275,23 @@ static int mdss_fb_notify_update(struct msm_fb_data_type *mfd,
 
 static int lcd_backlight_registered;
 
+#ifdef CONFIG_PLATFORM_V12BN
+static u32 tinno_brightness = 0;   //tinno map backlight
+static int BRIGHT_MAP[256]= {0,24,25,25,26,27,27,28,28,29,                 29,30,31,31,32,32,33,34,34,35,
+                             36,37,37,38,39,40,41,41,42,43,                44,45,46,47,48,49,50,51,52,53,
+                             54,55,56,57,58,59,61,62,63,64,                66,67,68,70,71,73,74,76,77,79,
+                             80,82,84,85,87,89,91,93,94,96,                98,100,102,105,107,109,111,113,116,118,
+                             120,123,125,128,130,133,136,139,141,144,       147,150,153,156,160,163,166,170,173,177,
+                             180,184,188,191,195,199,203,207,212,216,       220,225,229,234,239,244,249,254,259,264,
+                             270,275,281,286,292,298,304,310,317,323,       330,336,343,350,357,365,372,380,387,395,
+                             403,412,420,428,437,446,455,464,474,484,       493,503,514,524,535,546,557,568,580,591,
+                             604,616,628,641,654,668,681,695,709,724,       738,753,769,784,800,817,833,850,867,885,
+                             903,922,940,959,979,999,1019,1040,1061,1083,    1105,1127,1150,1174,1198,1222,1247,1272,1298,1325,
+                             1352,1379,1407,1436,1465,1495,1525,1556,1588,1620,1653,1687,1721,1756,1792,1829,1866,1904,1943,1982,
+                             2023,2064,2106,2149,2192,2237,2283,2329,2376,2425,2474,2525,2576,2628,2682,2736,2792,2849,2907,2966,
+                             3027,3088,3151,3215,3281,3348,3416,3485,3556,3629,3702,3778,3855,3933,4013,4095
+                            };
+#endif
 static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 				      enum led_brightness value)
 {
@@ -291,8 +308,13 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
-	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
-				mfd->panel_info->brightness_max);
+	#ifdef CONFIG_PLATFORM_V12BN
+	if (tinno_brightness)
+		bl_lvl = BRIGHT_MAP[value];         //tinno map backlight
+	else
+	#endif
+		MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
+		                  mfd->panel_info->brightness_max);
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;

@@ -549,6 +549,16 @@ struct mdss_dsi_ctrl_pdata {
 	/* DBA data */
 	struct workqueue_struct *workq;
 	struct delayed_work dba_work;
+
+	#ifdef CONFIG_PLATFORM_V12BN
+	struct delayed_work te_event_work;
+	int tinno_vio_te_irq;
+	int tinno_vio_te_gpio;
+	u32 te_count;
+	u32 te_count_priv;
+	bool tinno_vio_te_enable;
+	#endif
+
 	char bridge_name[MSM_DBA_CHIP_NAME_MAX_LEN];
 	uint32_t bridge_index;
 	bool ds_registered;
@@ -675,6 +685,10 @@ void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
 	u32 mask, u32 val);
 int mdss_dsi_phy_pll_reset_status(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata, int power_state);
+
+#ifdef CONFIG_GPIO_TINNO_LCD_LDO
+int mdss_dsi_panel_disp_en_gpio(struct mdss_panel_data *pdata, int enable);
+#endif
 
 static inline const char *__mdss_dsi_pm_name(enum dsi_pm_type module)
 {
