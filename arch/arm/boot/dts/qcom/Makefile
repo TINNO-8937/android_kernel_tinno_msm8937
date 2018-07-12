@@ -2,6 +2,8 @@ ifeq ($(CONFIG_PROJECT_GARLIC),y)
 dtb-$(CONFIG_ARCH_MSM8937) += msm8937-pmi8950-mtp-garlic.dtb
 else ifeq ($(CONFIG_PROJECT_WIMLITE),y)
 dtb-$(CONFIG_ARCH_MSM8940) += msm8940-pmi8950-mtp-wimlite.dtb
+else ifeq ($(CONFIG_PROJECT_HS2),y)
+dtb-$(CONFIG_ARCH_MSM8937) += msm8937-pmi8940-hs2.dtb
 else
 dtb-$(CONFIG_ARCH_MSM8996) += msm8996-v2-pmi8994-mtp.dtb \
 	msm8996-v2-pmi8994-pmk8001-mtp.dtb \
