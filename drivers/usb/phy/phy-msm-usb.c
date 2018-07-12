@@ -114,6 +114,7 @@ MODULE_PARM_DESC(dcp_max_current, "max current drawn for DCP charger");
 static DECLARE_COMPLETION(pmic_vbus_init);
 static struct msm_otg *the_msm_otg;
 static bool debug_bus_voting_enabled;
+static bool debug_floated_charger_enabled;
 
 static struct regulator *hsusb_3p3;
 static struct regulator *hsusb_1p8;
@@ -2841,6 +2842,12 @@ static void msm_otg_sm_work(struct work_struct *w)
 				case USB_DCP_CHARGER:
 					/* fall through */
 				case USB_PROPRIETARY_CHARGER:
+					#ifdef CONFIG_PLATFORM_V12BN
+					if(motg->pdata->enable_floated_charger)
+						msm_otg_notify_charger(motg,
+						                       IDEV_CHG_MAX_TINNO);
+					else
+					#endif
 					msm_otg_notify_charger(motg,
 							dcp_max_current);
 					if (!motg->is_ext_chg_dcp)
@@ -2858,6 +2865,11 @@ static void msm_otg_sm_work(struct work_struct *w)
 							IDEV_CHG_MAX);
 					/* fall through */
 				case USB_SDP_CHARGER:
+					#ifdef CONFIG_PLATFORM_TINNO
+					msm_otg_notify_charger(motg,100);
+					msleep(100);
+					msm_otg_notify_charger(motg,500);
+					#endif
 					pm_runtime_get_sync(otg->phy->dev);
 					msm_chg_check_dcd_flchg(motg);
 					/*
@@ -4362,7 +4374,6 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 	if (pdata->enable_floated_charger == FLOATING_AS_DCP ||
 		pdata->enable_floated_charger == FLOATING_AS_INVALID)
 		debug_floated_charger_enabled = true;
-
 	return pdata;
 }
 
@@ -4377,6 +4388,10 @@ static int msm_otg_probe(struct platform_device *pdev)
 	struct msm_otg_platform_data *pdata;
 	void __iomem *tcsr;
 	int id_irq = 0;
+
+	#ifdef CONFIG_PLATFORM_V12BN
+	struct qpnp_vadc_chip *vadc_dev = NULL;
+	#endif
 
 	dev_info(&pdev->dev, "msm_otg probe\n");
 
@@ -4534,6 +4549,11 @@ static int msm_otg_probe(struct platform_device *pdev)
 
 	of_property_read_u32(pdev->dev.of_node, "qcom,pm-qos-latency",
 				&motg->pm_qos_latency);
+
+	#ifdef CONFIG_PLATFORM_V12BN
+	if (of_find_property(pdev->dev.of_node, "qcom,usbin-vadc", NULL))
+		vadc_dev = qpnp_get_vadc(&pdev->dev, "usbin");
+	#endif
 
 	pdata = msm_otg_dt_to_pdata(pdev);
 	if (!pdata) {
@@ -4848,6 +4868,10 @@ static int msm_otg_probe(struct platform_device *pdev)
 	phy->set_power = msm_otg_set_power;
 	phy->set_suspend = msm_otg_set_suspend;
 	phy->dbg_event = msm_otg_dbg_log_event;
+
+	#ifdef CONFIG_PLATFORM_V12BN
+	motg->vadc_dev = vadc_dev;
+	#endif
 
 	phy->io_ops = &msm_otg_io_ops;
 
