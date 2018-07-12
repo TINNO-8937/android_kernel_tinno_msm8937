@@ -82,6 +82,10 @@
  */
 #define ADSP_STATE_READY_TIMEOUT_MS 50
 
+#ifdef CONFIG_PROJECT_GARLIC
+bool current_ext_spk_pa_state = false;
+#endif
+
 #define HPHL_PA_DISABLE (0x01 << 1)
 #define HPHR_PA_DISABLE (0x01 << 2)
 #define EAR_PA_DISABLE (0x01 << 3)
@@ -133,14 +137,18 @@ enum {
 static const DECLARE_TLV_DB_SCALE(digital_gain, 0, 1, 0);
 static const DECLARE_TLV_DB_SCALE(analog_gain, 0, 25, 1);
 static struct snd_soc_dai_driver msm8x16_wcd_i2s_dai[];
+#ifdef CONFIG_PLATFORM_TINNO
+/* By default disable the internal speaker boost   TN:peter*/
+static bool spkr_boost_en = false;
+#else
 /* By default enable the internal speaker boost */
 static bool spkr_boost_en = true;
+#endif
 
 #define MSM8X16_WCD_ACQUIRE_LOCK(x) \
 	mutex_lock_nested(&x, SINGLE_DEPTH_NESTING)
 
 #define MSM8X16_WCD_RELEASE_LOCK(x) mutex_unlock(&x)
-
 
 /* Codec supports 2 IIR filters */
 enum {
@@ -446,6 +454,10 @@ static bool msm8x16_adj_ref_current(struct snd_soc_codec *codec,
 
 	return true;
 }
+
+#ifdef CONFIG_PROJECT_GARLIC
+extern int ext_spk_pa_gpio;
+#endif
 
 void msm8x16_wcd_spk_ext_pa_cb(
 		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
@@ -2128,6 +2140,66 @@ static int msm8x16_wcd_hph_mode_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+#ifdef CONFIG_PROJECT_GARLIC
+static int msm8x16_wcd_ext_spk_get(struct snd_kcontrol *kcontrol,
+                                   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+
+	if (current_ext_spk_pa_state == false) {
+		ucontrol->value.integer.value[0] = 0;
+	} else if (current_ext_spk_pa_state == true) {
+		ucontrol->value.integer.value[0] = 1;
+	} else {
+		dev_err(codec->dev, "%s: ERROR: Unsupported Speaker ext = %d\n",
+		        __func__, current_ext_spk_pa_state);
+		return -EINVAL;
+	}
+
+	dev_dbg(codec->dev, "%s: current_ext_spk_pa_state = %d\n", __func__,
+	        current_ext_spk_pa_state);
+	return 0;
+}
+
+static int msm8x16_wcd_ext_spk_set(struct snd_kcontrol *kcontrol,
+                                   struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol); 
+
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+	        __func__, ucontrol->value.integer.value[0]);
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 0:
+		if(gpio_is_valid(ext_spk_pa_gpio))
+			gpio_direction_output(ext_spk_pa_gpio, 0);
+		gpio_set_value_cansleep(ext_spk_pa_gpio, 0);
+		current_ext_spk_pa_state = false;
+		break;
+	case 1:
+		if(gpio_is_valid(ext_spk_pa_gpio)) {
+			gpio_direction_output(ext_spk_pa_gpio, 0);
+			gpio_set_value_cansleep(ext_spk_pa_gpio, 0);
+			udelay(2);
+			gpio_set_value(ext_spk_pa_gpio, 1);
+			udelay(2);
+			gpio_set_value(ext_spk_pa_gpio, 0);
+			udelay(2);
+			gpio_set_value(ext_spk_pa_gpio, 1);
+			current_ext_spk_pa_state = true;
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	dev_dbg(codec->dev, "%s: current_ext_spk_pa_state = %d\n",
+	        __func__, current_ext_spk_pa_state);
+
+	return 0;
+}
+#endif
+
 static int msm8x16_wcd_boost_option_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -2561,6 +2633,15 @@ static const struct soc_enum msm8x16_wcd_hph_mode_ctl_enum[] = {
 			msm8x16_wcd_hph_mode_ctrl_text),
 };
 
+#ifdef CONFIG_PROJECT_GARLIC
+static const char * const msm8x16_wcd_ext_spk_ctrl_text[] = {
+	"DISABLE", "ENABLE"
+};
+static const struct soc_enum msm8x16_wcd_ext_spk_ctl_enum[] = {
+	SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_ext_spk_ctrl_text),
+};
+#endif
+
 /*cut of frequency for high pass filter*/
 static const char * const cf_text[] = {
 	"MIN_3DB_4Hz", "MIN_3DB_75Hz", "MIN_3DB_150Hz"
@@ -2603,6 +2684,11 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 
 	SOC_ENUM_EXT("LOOPBACK Mode", msm8x16_wcd_loopback_mode_ctl_enum[0],
 		msm8x16_wcd_loopback_mode_get, msm8x16_wcd_loopback_mode_put),
+
+	#ifdef CONFIG_PROJECT_GARLIC
+	SOC_ENUM_EXT("Speaker Ext", msm8x16_wcd_ext_spk_ctl_enum[0], 
+	msm8x16_wcd_ext_spk_get, msm8x16_wcd_ext_spk_set),
+	#endif
 
 	SOC_SINGLE_TLV("ADC1 Volume", MSM8X16_WCD_A_ANALOG_TX_1_EN, 3,
 					8, 0, analog_gain),
@@ -5882,8 +5968,7 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 	}
 
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
-		      wcd_mbhc_registers, true);
-
+	              wcd_mbhc_registers, true);
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;

@@ -30,6 +30,10 @@
 #include "wcd-mbhc-v2.h"
 #include "wcdcal-hwdep.h"
 
+#ifdef CONFIG_PROJECT_GARLIC
+extern bool ext_spk_pa_current_state;
+#endif
+
 #define WCD_MBHC_JACK_MASK (SND_JACK_HEADSET | SND_JACK_OC_HPHL | \
 			   SND_JACK_OC_HPHR | SND_JACK_LINEOUT | \
 			   SND_JACK_MECHANICAL | SND_JACK_MICROPHONE2 | \
@@ -628,7 +632,23 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 	} else {
 		pr_debug("%s PA is off\n", __func__);
 	}
+	#ifdef CONFIG_PROJECT_GARLIC
+	if(ext_spk_pa_current_state == false)
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
+	#elif defined(CONFIG_PLATFORM_V12BN)
+	{
+		extern bool tinno_ext_spk_pa_current_state;
+		extern bool tinno_ext_spk_pa_support;
+		if (tinno_ext_spk_pa_support) {
+			if (tinno_ext_spk_pa_current_state == false)
+				WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
+		} else {
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
+		}
+	}
+	#else
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 0);
+	#endif
 	usleep_range(wg_time * 1000, wg_time * 1000 + 50);
 }
 
@@ -2309,8 +2329,13 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 		/* Insertion debounce set to 192ms */
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 12);
 	else
+		#ifdef CONFIG_PLATFORM_TINNO
+		/* Insertion debounce set to 256ms */
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 9);
+		#else
 		/* Insertion debounce set to 96ms */
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_INSREM_DBNC, 6);
+		#endif
 
 	/* Button Debounce set to 16ms */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_DBNC, 2);
@@ -2419,11 +2444,46 @@ static void wcd_mbhc_fw_read(struct work_struct *work)
 	(void) wcd_mbhc_initialise(mbhc);
 }
 
+#ifdef CONFIG_PLATFORM_V12BN
+static void tinno_dt_parse_mbhc_keycode(struct wcd_mbhc *mbhc)
+{
+	const char *mbhc_keycode = "qcom,tinno_mbhc_keycode";
+	struct snd_soc_card *card = mbhc->codec->component.card;
+	struct property *prop;
+	unsigned int *keycode;
+	int ret,i;
+	prop = of_find_property(card->dev->of_node, mbhc_keycode, NULL);
+	if (prop && prop->length) {
+		keycode = devm_kzalloc(card->dev,prop->length,GFP_KERNEL);
+		if (!keycode) {
+			printk("%s: zalloc fail \n",__func__);
+			return;
+		}
+		ret = of_property_read_u32_array(card->dev->of_node,mbhc_keycode,keycode,prop->length / sizeof(u32));
+		if (ret < 0) {
+			printk("%s: keycode of node fail(%d) \n",__func__,ret);
+			devm_kfree(card->dev,keycode);
+			keycode = NULL;
+		} else {
+			for (i = 0 ; i < WCD_MBHC_KEYCODE_NUM ; i++) {
+				mbhc->mbhc_cfg->key_code[i] = keycode[i];
+			}
+			devm_kfree(card->dev,keycode);
+			keycode = NULL;
+		}
+	}
+}
+#endif
+
 int wcd_mbhc_set_keycode(struct wcd_mbhc *mbhc)
 {
 	enum snd_jack_types type;
 	int i, ret, result = 0;
 	int *btn_key_code;
+
+	#ifdef CONFIG_PLATFORM_V12BN
+	tinno_dt_parse_mbhc_keycode(mbhc);
+	#endif
 
 	btn_key_code = mbhc->mbhc_cfg->key_code;
 

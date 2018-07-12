@@ -316,6 +316,7 @@ enum msm_pcm_routing_event {
 	MSM_PCM_RT_EVT_MAX,
 };
 
+#if defined(CONFIG_PROJECT_WIMLITE) || defined(CONFIG_PLATFORM_V12BN)
 enum {
 	EXT_EC_REF_NONE = 0,
 	EXT_EC_REF_PRI_MI2S_TX,
@@ -325,6 +326,7 @@ enum {
 	EXT_EC_REF_QUIN_MI2S_TX,
 	EXT_EC_REF_SLIM_1_TX,
 };
+#endif
 
 #define INVALID_SESSION -1
 #define SESSION_TYPE_RX 0
