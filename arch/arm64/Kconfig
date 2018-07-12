@@ -1066,3 +1066,8 @@ config PROJECT_WIMLITE
 	bool "WIMLITE project support"
 	help
 	  This option enables support project name
+
+config PROJECT_HS2
+	bool "HS2 project support"
+	help
+	  This option enables support project name
