@@ -481,6 +481,11 @@ struct input_keymap_entry {
 
 #define KEY_MICMUTE		248	/* Mute / unmute the microphone */
 
+#ifdef CONFIG_HALL_SENSOR
+#define KEY_HALLOPEN	249
+#define KEY_HALLCLOSE	250
+#endif
+
 /* Code 255 is reserved for special needs of AT keyboard driver */
 
 #define BTN_MISC		0x100
