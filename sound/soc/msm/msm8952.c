@@ -302,54 +302,41 @@ done:
 	return ret;
 }
 
+#ifdef CONFIG_PLATFORM_V12BN
 int is_ext_spk_gpio_support(struct platform_device *pdev,
-			struct msm8916_asoc_mach_data *pdata)
+                            struct msm8916_asoc_mach_data *pdata)
 {
 	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
 
-	#ifdef CONFIG_PLATFORM_V12BN
 	int ret;
 	const char *tinno_ext_pa_mode = "qcom,msm-spk-ext-pa-mode";
 	const char *tinno_ext_pa_i2s = "qcom,msm-spk-ext-pa-i2s";
 	static bool ext_pa_gpio_requested = false;
 	int tinno_i2s = 0;
-	#endif
 
 	pr_debug("%s:Enter\n", __func__);
 
-	#ifdef CONFIG_PLATFORM_V12BN
 	ret = of_property_read_u32(pdev->dev.of_node, tinno_ext_pa_i2s, &tinno_i2s);
 	if (ret) {
-		dev_err(&pdev->dev,"%s: missing %s in dt node\n", __func__,
-							tinno_ext_pa_mode);
+		dev_err(&pdev->dev,	"%s: missing %s in dt node\n", __func__, tinno_ext_pa_mode);
 	} else {
-		if (tinno_i2s == 1)
+		if(tinno_i2s == 1)
 			tinno_ext_spk_i2s_support = true;
+
 	}
-	#endif
-
 	pdata->spk_ext_pa_gpio = of_get_named_gpio(pdev->dev.of_node,
-				spk_ext_pa, 0);
-	#ifdef CONFIG_PROJECT_GARLIC
-	ext_spk_pa_gpio = pdata->spk_ext_pa_gpio;
-	#endif
+	                         spk_ext_pa, 0);
 
-	#ifdef CONFIG_PLATFORM_TINNO
-	#ifndef CONFIG_PLATFORM_V12BN /* Hack */
-	of_property_read_u32(pdev->dev.of_node, "qcom,spk-ext-pa_mode", &pdata->ext_pa_mode);
-	#endif
-	#endif
 	if (pdata->spk_ext_pa_gpio < 0) {
 		dev_dbg(&pdev->dev,
-			"%s: missing %s in dt node\n", __func__, spk_ext_pa);
+		        "%s: missing %s in dt node\n", __func__, spk_ext_pa);
 	} else {
 		if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
 			pr_err("%s: Invalid external speaker gpio: %d",
-				__func__, pdata->spk_ext_pa_gpio);
+			       __func__, pdata->spk_ext_pa_gpio);
 			return -EINVAL;
 		}
-		#ifdef CONFIG_PLATFORM_V12BN
-		if (!ext_pa_gpio_requested) {
+		if(!ext_pa_gpio_requested) {
 			ret = gpio_request(pdata->spk_ext_pa_gpio, "spk_ext_pa_gpio");
 			if (ret) {
 				pr_info("%s: gpio_request failed for spk_ext_pa_gpio.\n",
@@ -358,24 +345,19 @@ int is_ext_spk_gpio_support(struct platform_device *pdev,
 			}
 			ext_pa_gpio_requested = true;
 		}
-		#endif
-		#ifdef CONFIG_PLATFORM_TINNO
 		gpio_direction_output(pdata->spk_ext_pa_gpio, 0);
-		#endif
-		#ifdef CONFIG_PLATFORM_V12BN
+
 		ret = of_property_read_u32(pdev->dev.of_node, tinno_ext_pa_mode, &tinno_pa_mode);
 		if (ret) {
-			dev_err(&pdev->dev,"%s: missing %s in dt node\n", __func__,
-							tinno_ext_pa_mode);
+			dev_err(&pdev->dev,	"%s: missing %s in dt node\n", __func__, tinno_ext_pa_mode);
 			return -EINVAL;
 		}
 		tinno_ext_spk_pa_support = true;
-		#endif
+
 	}
 	return 0;
 }
 
-#ifdef CONFIG_PLATFORM_V12BN
 /**********************
 *Func: set Aw8xxx Pa Control Mode ,reference Aw81xxx IC datasheet
 *@pa_gpio: use to Aw8xxx control gpio ,This Gpio request for codec_Probe(), and set gpio out Mode.
@@ -386,18 +368,18 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 	printk(KERN_ERR "AW8xxx_Mode_set\n");
 	gpio_set_value_cansleep(pa_gpio,0);
 	udelay(1);
-	if(pa_mode == AW8XXX_OFF)    //OFF the PA
+	if(pa_mode == AW8XXX_OFF)
 		return;
 	gpio_set_value_cansleep(pa_gpio,1);
 
 	switch(pa_mode) {
 	case AW8737_1P2W_8Ohm:
-	case AW87318_1P2W_8Ohm:                   //one Positive-Edge
+	case AW87318_1P2W_8Ohm: // One Positive-Edge
 		printk(KERN_ERR "The AW8xxx Mode have ONE Positive_Edge\n");
 		break;
 	case AW8155_P8W_8Ohm:
 	case AW87318_1P5W_6Ohm:
-	case AW87318_1P1W_8Ohm:                   //two Positive-Edge
+	case AW87318_1P1W_8Ohm: // Two Positive-Edge
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
 		udelay(1);
@@ -406,7 +388,7 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 		break;
 	case AW8737_P8W_8Ohm:
 	case AW8737_1W_6Ohm:
-	case AW87318_1W_8Ohm:                     //three Positive_edge
+	case AW87318_1W_8Ohm: // Three Positive_edge
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
 		udelay(1);
@@ -417,7 +399,7 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 		gpio_set_value_cansleep(pa_gpio,1);
 		printk(KERN_ERR "The AW8xxx Mode have THREE Positive_Edge\n");
 		break;
-	case AW8737_P8W_6Ohm:                     //fore Positive_Edge
+	case AW8737_P8W_6Ohm: // Four Positive_Edge
 	case AW87318_P9W_8Ohm:
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
@@ -434,7 +416,7 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 		printk(KERN_ERR "The AW8xxx Mode have FORE Positive_Edge\n");
 		break;
 	case AW87318_P8W_8Ohm:
-	case AW87318_1W_6Ohm:                      //five Positive_Edge
+	case AW87318_1W_6Ohm: // Five Positive_Edge
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
 		udelay(1);
@@ -453,7 +435,7 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 		gpio_set_value_cansleep(pa_gpio,1);
 		printk(KERN_ERR "The AW8xxx Mode have FIVE Positive_Edge\n");
 		break;
-	case AW87318_P9W_6Ohm:                     //six Positive_Edge
+	case AW87318_P9W_6Ohm: // Six Positive_Edge
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
 		udelay(1);
@@ -476,7 +458,7 @@ static void AW8xxx_Mode_set(int pa_gpio, int pa_mode)
 		gpio_set_value_cansleep(pa_gpio,1);
 		printk(KERN_ERR "The AW8xxx Mode have SIX Positive_Edge\n");
 		break;
-	case AW87318_P8W_6Ohm:                        //seven Positive_Edge
+	case AW87318_P8W_6Ohm: // Seven Positive_Edge
 		udelay(1);
 		gpio_set_value_cansleep(pa_gpio,0);
 		udelay(1);
@@ -575,13 +557,12 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 		pr_debug("%s: %s external speaker PA\n", __func__,
 		         enable ? "Enable" : "Disable");
 		if(enable) {
-			//AW87319_Audio_Speaker();
 			aw87339_audio_kspk();
-			tinno_ext_spk_pa_current_state = true; //yangliang add to feedback ext pa-spk used state for insert hph of spk-voice and out hph resulting in spk-voice no downlink 20160530
+			tinno_ext_spk_pa_current_state = true;
 
 		} else {
 			aw87339_audio_off();
-			tinno_ext_spk_pa_current_state = false; //yangliang add to feedback ext pa-spk used state for insert hph of spk-voice and out hph resulting in spk-voice no downlink 20160530
+			tinno_ext_spk_pa_current_state = false;
 
 		}
 
@@ -596,57 +577,61 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 		pr_debug("%s: %s external speaker PA\n", __func__,
 		         enable ? "Enable" : "Disable");
 
-		//++ tinno_mba,external pa TN:peter
-#if 0 //remove qcom code becase delay time too long ,about >50us TN:peter
 		if (enable) {
-			ret = msm_gpioset_activate(CLIENT_WCD_INT, "ext_spk_gpio");
-			if (ret) {
-				pr_err("%s: gpio set cannot be de-activated %s\n",
-				       __func__, "ext_spk_gpio");
-				return ret;
-			}
-			gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
-		} else {
-			gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
-			ret = msm_gpioset_suspend(CLIENT_WCD_INT, "ext_spk_gpio");
-			if (ret) {
-				pr_err("%s: gpio set cannot be de-activated %s\n",
-				       __func__, "ext_spk_gpio");
-				return ret;
-			}
-		}
-#endif
-		if (enable) {
-			tinno_ext_spk_pa_current_state = true;// add to feedback ext pa-spk used state for insert hph of spk-voice and out hph resulting in spk-voice no downlink
+			tinno_ext_spk_pa_current_state = true;
 			AW8xxx_Mode_set(pdata->spk_ext_pa_gpio,tinno_pa_mode);
 		} else {
-			tinno_ext_spk_pa_current_state = false;// add to feedback ext pa-spk used state for insert hph of spk-voice and out hph resulting in spk-voice no downlink 20160530
+			tinno_ext_spk_pa_current_state = false;
 			AW8xxx_Mode_set(pdata->spk_ext_pa_gpio,AW8XXX_OFF);
 		}
-		//-- tinno_mba,external pa
 	}
 	return 0;
 }
-#else
+#elif defined(CONFIG_PLATFORM_TINNO)
+int is_ext_spk_gpio_support(struct platform_device *pdev,
+                            struct msm8916_asoc_mach_data *pdata)
+{
+	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
+
+	pr_debug("%s:Enter\n", __func__);
+
+	pdata->spk_ext_pa_gpio = of_get_named_gpio(pdev->dev.of_node,
+	                         spk_ext_pa, 0);
+	#ifdef CONFIG_PROJECT_GARLIC
+	ext_spk_pa_gpio = pdata->spk_ext_pa_gpio;
+	#endif
+	of_property_read_u32(pdev->dev.of_node, "qcom,spk-ext-pa_mode", &pdata->ext_pa_mode);
+
+	if (pdata->spk_ext_pa_gpio < 0) {
+		dev_dbg(&pdev->dev,
+		        "%s: missing %s in dt node\n", __func__, spk_ext_pa);
+	} else {
+		if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
+			pr_err("%s: Invalid external speaker gpio: %d",
+			       __func__, pdata->spk_ext_pa_gpio);
+			return -EINVAL;
+		}
+		gpio_direction_output(pdata->spk_ext_pa_gpio, 0);
+	}
+	return 0;
+}
+
 static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 {
 	struct snd_soc_card *card = codec->component.card;
 	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret = 0;
 
-	#ifdef CONFIG_PLATFORM_TINNO
 	static bool ext_pa_gpio_requested = false;
-	#endif
 	if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
 		pr_err("%s: Invalid gpio: %d\n", __func__,
-			pdata->spk_ext_pa_gpio);
+		       pdata->spk_ext_pa_gpio);
 		return false;
 	}
 
 	pr_debug("%s: %s external speaker PA\n", __func__,
-		enable ? "Enable" : "Disable");
+	         enable ? "Enable" : "Disable");
 
-	#ifdef CONFIG_PLATFORM_TINNO
 	pr_info("ext_pa_gpio_requested=%d\n", ext_pa_gpio_requested);
 	if(!ext_pa_gpio_requested) {
 		ret = gpio_request(pdata->spk_ext_pa_gpio, "spk_ext_pa_gpio");
@@ -655,19 +640,11 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 			        __func__);
 			goto err;
 		}
+
 		ext_pa_gpio_requested = true;
 	}
-	#endif
 
 	if (enable) {
-		#ifndef CONFIG_PLATFORM_TINNO
-		ret = msm_gpioset_activate(CLIENT_WCD_INT, "ext_spk_gpio");
-		if (ret) {
-			pr_err("%s: gpio set cannot be de-activated %s\n",
-					__func__, "ext_spk_gpio");
-			return ret;
-		}
-		#endif
 		#ifdef CONFIG_PROJECT_GARLIC
 		printk(KERN_ERR"goto mode-2");
 		ext_spk_pa_current_state = true;
@@ -676,30 +653,72 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, 0);
 		udelay(2);
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, 1);
-		#else
 		ext_spk_pa_current_state = true;
 		gpio_direction_output(pdata->spk_ext_pa_gpio, enable);
 		#endif
 	} else {
-		#ifdef CONFIG_PLATFORM_TINNO
 		ext_spk_pa_current_state = false;
 		gpio_direction_output(pdata->spk_ext_pa_gpio, enable);
-		#else
+	}
+err:
+	return 0;
+}
+#else
+int is_ext_spk_gpio_support(struct platform_device *pdev,
+                            struct msm8916_asoc_mach_data *pdata)
+{
+	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
+
+	pr_debug("%s:Enter\n", __func__);
+
+	pdata->spk_ext_pa_gpio = of_get_named_gpio(pdev->dev.of_node,
+	                         spk_ext_pa, 0);
+
+	if (pdata->spk_ext_pa_gpio < 0) {
+		dev_dbg(&pdev->dev,
+		        "%s: missing %s in dt node\n", __func__, spk_ext_pa);
+	} else {
+		if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
+			pr_err("%s: Invalid external speaker gpio: %d",
+			       __func__, pdata->spk_ext_pa_gpio);
+			return -EINVAL;
+		}
+	}
+	return 0;
+}
+
+static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
+{
+	struct snd_soc_card *card = codec->component.card;
+	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+	int ret;
+
+	if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
+		pr_err("%s: Invalid gpio: %d\n", __func__,
+		       pdata->spk_ext_pa_gpio);
+		return false;
+	}
+
+	pr_debug("%s: %s external speaker PA\n", __func__,
+	         enable ? "Enable" : "Disable");
+
+	if (enable) {
+		ret = msm_gpioset_activate(CLIENT_WCD_INT, "ext_spk_gpio");
+		if (ret) {
+			pr_err("%s: gpio set cannot be de-activated %s\n",
+			       __func__, "ext_spk_gpio");
+			return ret;
+		}
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
-		ret = msm_gpioset_suspend(CLIENT_WCD_INT, "ext_spk_gpio");
-		#endif
-		#ifndef CONFIG_PLATFORM_TINNO
+	} else {
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
 		ret = msm_gpioset_suspend(CLIENT_WCD_INT, "ext_spk_gpio");
 		if (ret) {
 			pr_err("%s: gpio set cannot be de-activated %s\n",
-					__func__, "ext_spk_gpio");
+			       __func__, "ext_spk_gpio");
 			return ret;
 		}
-		#endif
 	}
-	#ifdef CONFIG_PLATFORM_TINNO
-err:
-	#endif
 	return 0;
 }
 #endif
