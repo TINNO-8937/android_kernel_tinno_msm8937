@@ -39,6 +39,98 @@
 	reg = <0x84A00000 0x1900000>;
 };
 
+&spmi_bus {
+	qcom,pmi8950@2 {
+		pmi8950_gpios: gpios {
+			gpio@c100 {
+				qcom,mode = <0>;
+				qcom,output-type = <2>;
+				qcom,pull = <1>;
+				qcom,vin-sel = <0>;
+				qcom,out-strength = <2>;
+				/delete-property/ status;
+			};
+		};
+
+		pmi8950_charger: qcom,qpnp-smbcharger {
+			qcom,iterm-ma = <250>;
+			qcom,float-voltage-mv = <4400>;
+			qcom,fastchg-current-ma = <1500>;
+			qcom,thermal-mitigation = <1500 1000 300 0>;
+			/delete-property/ qcom,parallel-usb-min-current-ma;
+			/delete-property/ qcom,parallel-usb-9v-min-current-ma;
+			/delete-property/ qcom,parallel-allowed-lowering-ma;
+			qcom,float-voltage-comp = <13>; //4100v
+			qcom,fastchg-current-comp = <700>; //900ma
+			qcom,no-parallel-defualt-dcp-icl-ma = <1400>;
+			qcom,no_support_qc;
+			qcom,speed-current = <1500 1400 1200 1100 900 700 600 450 400 0>;
+		};
+
+		pmi8950_fg: qcom,fg {
+			qcom,fg-cc-cv-threshold-mv = <4390>;
+			qcom,hold-soc-while-full;
+			qcom,vbat-estimate-diff-mv =<120>;
+			qcom,resume-soc = <98>;
+			qcom,fg-iterm-ma = <300>;
+			qcom,fg-chg-iterm-ma = <250>;
+			qcom,fg-cutoff-voltage-mv = <3400>;
+			qcom,ext-sense-type;
+			qcom,fg-delta-soc = <1>;
+			qcom,thermal-coefficients =[c8 86 c1 50 d3 37];
+		};
+
+		/delete-node/ qcom,leds@a100;
+		qcom,leds@a100 {
+			compatible = "qcom,leds-qpnp";
+			reg = <0xa100 0x100>;
+			status = "okay";
+			qcom,led_mpp_2 {
+			label = "mpp";
+				linux,name = "green";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <40>;
+				qcom,current-setting = <10>;
+				qcom,id = <6>;
+				qcom,mode = "pwm";
+				qcom,source-sel = <8>;
+				qcom,mode-ctrl = <0x60>;
+				qcom,pwm-channel = <0>;
+				qcom,pwm-us = <5000000>;
+				pwms = <&pmi8950_pwm 0 0>;
+				pwm-names = "green";
+				qcom,use-blink;
+			};
+		};
+	};
+
+	qcom,pmi8950@3 {
+		/delete-node/ pmi8950_pwm;
+		pmi8950_pwm: pwm@b000 {
+				compatible = "qcom,qpnp-pwm";
+				reg = <0xb000 0x100>;
+				reg-names = "qpnp-lpg-channel-base";
+				qcom,channel-id = <0>;
+				qcom,supported-sizes = <6>, <9>;
+				qcom,period = <1000000>;
+				qcom,dtest-line = <1>;
+				qcom,dtest-output = <1>;
+				#pwm-cells = <2>;
+				qcom,pwm {
+				qcom,duty = <500000>;
+				label = "pwm";};
+		};
+
+		wled: qcom,leds@d800 {
+			/delete-property/ qcom,en-ext-pfet-sc-pro;
+		};
+
+		pmi_haptic: qcom,haptic@c000 {
+			qcom,vmax-mv = <3000>;
+		};
+	};
+};
 &soc {
 
 	/delete-node/ hbtp;
