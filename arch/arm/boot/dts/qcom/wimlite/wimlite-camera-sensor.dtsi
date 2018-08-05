@@ -11,6 +11,24 @@
  * GNU General Public License for more details.
  */
 
+&soc {
+		led_flash1: qcom,camera-led-flash {
+			cell-index = <1>;
+			compatible = "qcom,camera-led-flash";
+			qcom,flash-type = <1>;
+			qcom,flash-name = "led_flash1";
+			qcom,gpio-no-mux = <0>;
+			gpios = <&tlmm 68 0>,
+				<&tlmm 50 0>;
+			qcom,gpio-flash-en = <0>;
+			qcom,gpio-flash-now = <1>;
+			qcom,gpio-req-tbl-num = <0 1>;
+			qcom,gpio-req-tbl-flags = <0 0>;
+			qcom,gpio-req-tbl-label = "FLASH_EN",
+				"FLASH_NOW";
+	};
+};
+
 &cci {
 
 	/delete-node/ qcom,eeprom@0;
@@ -156,7 +174,7 @@
 		qcom,csid-sd-index = <1>;
 		qcom,mount-angle = <270>;
 		qcom,eeprom-src = <&eeprom1>;
-        qcom,led-flash-src = <&led_flash0>;
+        qcom,led-flash-src = <&led_flash1>;
 		cam_vio-supply = <&pm8937_l6>;
 		qcom,cam-vreg-type = <0 0>;
 		qcom,cam-vreg-name ="cam_vio";
