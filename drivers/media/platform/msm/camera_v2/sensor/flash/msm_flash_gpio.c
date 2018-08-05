@@ -182,7 +182,7 @@ static int32_t msm_flash_init(
 	}
 
 	if (flash_data->cfg.flash_init_info->flash_driver_type ==
-		FLASH_DRIVER_GPIO)
+		FLASH_DRIVER_DEFAULT)
 		flash_driver_type = FLASH_DRIVER_GPIO;
 
 	if (flash_driver_type == FLASH_DRIVER_DEFAULT) {
