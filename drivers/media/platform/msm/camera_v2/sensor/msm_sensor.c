@@ -18,10 +18,6 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
 
-#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
-#include <linux/gpio.h>
-#include <linux/of_gpio.h>
-#endif
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
@@ -112,30 +108,6 @@ int32_t msm_sensor_free_sensor_data(struct msm_sensor_ctrl_t *s_ctrl)
 	return 0;
 }
 
-#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
-/* This function only used in leds-msm-gpio-dual-flash.c ,if don't use dual flash,  please keep below code*/
-int  is_front_camera = 0;
-void msm_sensor_set_front_camera_status(int  status)
-{
-	is_front_camera = status;
-}
-int msm_sensor_is_front_camera(void)
-{
-	return is_front_camera;
-}
-
-/* This function only used in leds-msm-gpio-dual-flash.c ,if don't use dual flash,  please keep below code*/
-int  is_mono_camera = 2;
-void msm_sensor_set_mono_camera_status(int  status)
-{
-	is_mono_camera = status;
-}
-int msm_sensor_is_mono_camera(void)
-{
-	return is_mono_camera;
-}
-#endif
-
 int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	struct msm_camera_power_ctrl_t *power_info;
@@ -147,10 +119,7 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, s_ctrl);
 		return -EINVAL;
 	}
-	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
-	msm_sensor_set_front_camera_status(0);
-	msm_sensor_set_mono_camera_status(2);
-	#endif
+
 	if (s_ctrl->is_csid_tg_mode)
 		return 0;
 
@@ -320,20 +289,6 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 
 	pr_debug("%s: read id: 0x%x expected id 0x%x:\n",
 			__func__, chipid, slave_info->sensor_id);
-
-	#ifdef CONFIG_LEDS_MSM_GPIO_DUAL_REAR_FLASH_AND_FRONT_FLASH
-	if (s_ctrl->id == 2)
-		msm_sensor_set_front_camera_status(1);
-	else
-		msm_sensor_set_front_camera_status(0);
-
-	if (s_ctrl->id == 0)
-		msm_sensor_set_mono_camera_status(0);
-	else if (s_ctrl->id == 1)
-		msm_sensor_set_mono_camera_status(1);
-	else
-		msm_sensor_set_mono_camera_status(2);
-	#endif
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("%s chip id %x does not match %x\n",
 				__func__, chipid, slave_info->sensor_id);
