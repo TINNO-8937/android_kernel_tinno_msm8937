@@ -228,6 +228,7 @@ struct msm8916_asoc_mach_data {
 	int ext_pa;
 	#ifdef CONFIG_PLATFORM_TINNO
 	int ext_pa_mode;
+  int spk_ext_pa_gpio_compatible;
 	#endif
 	int us_euro_gpio;
 	int spk_ext_pa_gpio;

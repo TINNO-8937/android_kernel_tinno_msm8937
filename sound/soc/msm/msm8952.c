@@ -116,6 +116,7 @@ int ext_spk_pa_gpio = -1;
 
 #ifdef CONFIG_PLATFORM_TINNO
 bool ext_spk_pa_current_state = false;
+int ext_spk_pa_gpio_compatible = -1;
 #endif
 static int msm8952_enable_dig_cdc_clk(struct snd_soc_codec *codec, int enable,
 					bool dapm);
@@ -591,28 +592,50 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 int is_ext_spk_gpio_support(struct platform_device *pdev,
                             struct msm8916_asoc_mach_data *pdata)
 {
+
 	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
+	#ifdef CONFIG_PROJECT_GARLIC
+	const char *spk_ext_pa_compatible = "qcom,msm-spk-ext-pa-compatible";
+	#endif
 
 	pr_debug("%s:Enter\n", __func__);
-
 	pdata->spk_ext_pa_gpio = of_get_named_gpio(pdev->dev.of_node,
 	                         spk_ext_pa, 0);
 	#ifdef CONFIG_PROJECT_GARLIC
+	pdata->spk_ext_pa_gpio_compatible = of_get_named_gpio(pdev->dev.of_node,
+	                                    spk_ext_pa_compatible, 0);
 	ext_spk_pa_gpio = pdata->spk_ext_pa_gpio;
+	ext_spk_pa_gpio_compatible = pdata->spk_ext_pa_gpio_compatible;
 	#endif
-	of_property_read_u32(pdev->dev.of_node, "qcom,spk-ext-pa_mode", &pdata->ext_pa_mode);
 
-	if (pdata->spk_ext_pa_gpio < 0) {
+	#ifdef CONFIG_PROJECT_GARLIC
+	if ((pdata->spk_ext_pa_gpio < 0) && (pdata->spk_ext_pa_gpio_compatible < 0)) {
 		dev_dbg(&pdev->dev,
 		        "%s: missing %s in dt node\n", __func__, spk_ext_pa);
 	} else {
-		if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
+		if ((!gpio_is_valid(pdata->spk_ext_pa_gpio)) && (!gpio_is_valid(pdata->spk_ext_pa_gpio_compatible))) {
+			pr_err("%s: Invalid external speaker gpio: %d",
+			       __func__, pdata->spk_ext_pa_gpio);
+			pr_err("%s: Invalid external speaker gpio compatible: %d",
+			       __func__, pdata->spk_ext_pa_gpio_compatible);
+			return -EINVAL;
+		}
+		gpio_direction_output(pdata->spk_ext_pa_gpio, 0);
+		gpio_direction_output(pdata->spk_ext_pa_gpio_compatible, 0);
+	}
+	#else
+	if ((pdata->spk_ext_pa_gpio < 0)) {
+		dev_dbg(&pdev->dev,
+		        "%s: missing %s in dt node\n", __func__, spk_ext_pa);
+	} else {
+		if ((!gpio_is_valid(pdata->spk_ext_pa_gpio)) && (!gpio_is_valid(pdata->spk_ext_pa_gpio_compatible))) {
 			pr_err("%s: Invalid external speaker gpio: %d",
 			       __func__, pdata->spk_ext_pa_gpio);
 			return -EINVAL;
 		}
 		gpio_direction_output(pdata->spk_ext_pa_gpio, 0);
 	}
+	#endif
 	return 0;
 }
 
@@ -622,17 +645,47 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret = 0;
 
+	#ifdef CONFIG_PROJECT_GARLIC
+	int ret_compatible = 0;
+	static bool ext_pa_gpio_requested_compatible = false;
+	#endif
+
 	static bool ext_pa_gpio_requested = false;
+
+	#ifdef CONFIG_PROJECT_GARLIC
+	if ((!gpio_is_valid(pdata->spk_ext_pa_gpio)) && (!gpio_is_valid(pdata->spk_ext_pa_gpio_compatible))) {
+		pr_err("%s: Invalid gpio: %d\n", __func__,
+		       pdata->spk_ext_pa_gpio);
+		pr_err("%s: Invalid gpio compatible: %d\n", __func__,
+		       pdata->spk_ext_pa_gpio_compatible);
+		return false;
+	}
+	#else
 	if (!gpio_is_valid(pdata->spk_ext_pa_gpio)) {
 		pr_err("%s: Invalid gpio: %d\n", __func__,
 		       pdata->spk_ext_pa_gpio);
 		return false;
 	}
+	#endif
 
 	pr_debug("%s: %s external speaker PA\n", __func__,
 	         enable ? "Enable" : "Disable");
 
 	pr_info("ext_pa_gpio_requested=%d\n", ext_pa_gpio_requested);
+	#ifdef CONFIG_PROJECT_GARLIC
+	pr_info("ext_pa_gpio_requested_compatible=%d\n", ext_pa_gpio_requested_compatible);
+	if((!ext_pa_gpio_requested) && (!ext_pa_gpio_requested_compatible)) {
+		ret = gpio_request(pdata->spk_ext_pa_gpio, "spk_ext_pa_gpio");
+		ret_compatible = gpio_request(pdata->spk_ext_pa_gpio_compatible, "spk_ext_pa_gpio_compatible");
+		if (ret && ret_compatible) {
+			pr_info("%s: gpio_request failed for spk_ext_pa_gpio.\n",
+			        __func__);
+			goto err;
+		}
+		ext_pa_gpio_requested = true;
+		ext_pa_gpio_requested_compatible = true;
+	}
+	#else
 	if(!ext_pa_gpio_requested) {
 		ret = gpio_request(pdata->spk_ext_pa_gpio, "spk_ext_pa_gpio");
 		if (ret) {
@@ -640,25 +693,37 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 			        __func__);
 			goto err;
 		}
-
 		ext_pa_gpio_requested = true;
 	}
+	#endif
 
 	if (enable) {
 		#ifdef CONFIG_PROJECT_GARLIC
-		printk(KERN_ERR"goto mode-2");
+		printk(KERN_ERR"goto mode-2 and do compatible\n");
 		ext_spk_pa_current_state = true;
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, 1);
 		udelay(2);
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, 0);
 		udelay(2);
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, 1);
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio_compatible, 1);
+		udelay(2);
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio_compatible, 0);
+		udelay(2);
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio_compatible, 1);
+		#else
 		ext_spk_pa_current_state = true;
-		gpio_direction_output(pdata->spk_ext_pa_gpio, enable);
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
+		#ifdef CONFIG_PROJECT_GARLIC
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio_compatible, enable);
+		#endif
 		#endif
 	} else {
 		ext_spk_pa_current_state = false;
-		gpio_direction_output(pdata->spk_ext_pa_gpio, enable);
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
+		#ifdef CONFIG_PROJECT_GARLIC
+		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio_compatible, enable);
+		#endif
 	}
 err:
 	return 0;
