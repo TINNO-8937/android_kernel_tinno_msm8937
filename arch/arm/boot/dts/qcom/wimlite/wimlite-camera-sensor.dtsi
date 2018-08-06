@@ -18,8 +18,8 @@
 			qcom,flash-type = <1>;
 			qcom,flash-name = "led_flash1";
 			qcom,gpio-no-mux = <0>;
-			gpios = <&tlmm 68 0>,
-				<&tlmm 50 0>;
+			gpios = <&tlmm 50 0>,
+				<&tlmm 68 0>;
 			qcom,gpio-flash-en = <0>;
 			qcom,gpio-flash-now = <1>;
 			qcom,gpio-req-tbl-num = <0 1>;
