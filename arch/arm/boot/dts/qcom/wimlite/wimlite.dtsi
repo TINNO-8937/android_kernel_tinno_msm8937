@@ -257,8 +257,10 @@
 	};
 };
 
-&i2c_5 {
-	status="disabled";
+&i2c_5 { /* BLSP2 QUP1 */
+	nq@28 {
+		qcom,nq-firm = <&tlmm 61 0x00>;
+	};
 };
 
 &spi_3 {
