@@ -18,20 +18,6 @@
 		};
 	};
 
-	tlmm_gpio_fpid {
-		gpio_fpid_active: gpio_fpid_active {
-			mux {
-				pins = "gpio16";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio16";
-				drive-strength = <2>;
-				bias-disable;
-			};
-		};
-	};
-
 	tlmm_gpio_compatible_control_pa {
 		gpio_key_active_compatible_control_pa: gpio_key_active_compatible_control_pa {
 			mux {
