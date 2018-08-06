@@ -26,6 +26,12 @@ config FINGERPRINT_ELAN_96SA_QSEE
   help
     elan Fingerprint chip 96sa/80sa for QSEE
 
+config FINGERPRINT_ELAN_519C_QSEE
+  bool FINGERPRINT_ELAN_519C_QSEE
+  default n
+  help
+    elan Fingerprint chip 519c for QSEE
+
 config FINGERPRINT_SILEAD_6163_QSEE
   bool FINGERPRINT_SILEAD_6163_QSEE
   default n
