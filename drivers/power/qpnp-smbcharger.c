@@ -56,7 +56,6 @@ bool g_do_not_support_qc = false;
 
 #ifdef CONFIG_PLATFORM_V12BN
 #define TINNO_SPECIAL_TEMP_SETTING
-#define CONFIG_SMART_CHARGING_CONTROL //enable smart charging control.
 int tinno_battery_capacity;
 #endif
 
