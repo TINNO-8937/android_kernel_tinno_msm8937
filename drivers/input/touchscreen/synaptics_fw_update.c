@@ -764,6 +764,11 @@ static enum flash_area fwu_go_nogo(void)
 
 	imagePR = kzalloc(sizeof(MAX_FIRMWARE_ID_LEN), GFP_KERNEL);
 	if (!imagePR) {
+		#ifdef CONFIG_PLATFORM_TINNO
+		dev_err(&i2c_client->dev,
+		        "%s: Failed to alloc mem for image pointer\n",
+		        __func__);
+		#endif
 		flash_area = NONE;
 		return flash_area;
 	}
@@ -771,8 +776,30 @@ static enum flash_area fwu_go_nogo(void)
 	if (fwu->force_update) {
 		flash_area = UI_FIRMWARE;
 		goto exit;
+	#ifdef CONFIG_PLATFORM_TINNO
+	} else {
+		#define STRING_BOOT_FTM_MODE "androidboot.mode=ffbm-01"
+		if (strstr(saved_command_line, STRING_BOOT_FTM_MODE)) {
+			flash_area = NONE;
+			goto exit;
+		}
+	#endif
 	}
-
+	retval = fwu_read_f01_device_status(&f01_device_status);
+	if (retval < 0) {
+		flash_area = NONE;
+		goto exit;
+	}
+	#ifdef CONFIG_PLATFORM_TINNO
+	/* Force update firmware when device is in bootloader mode */
+	if (f01_device_status.flash_prog) {
+		dev_info(&i2c_client->dev,
+		         "%s: In flash prog mode\n",
+		         __func__);
+		flash_area = UI_FIRMWARE;
+		goto exit;
+	}
+	#endif
 	if (img->is_contain_build_info) {
 		/* if package id does not match, do not update firmware */
 		fwu->fn_ptr->read(fwu->rmi4_data,
@@ -810,6 +837,7 @@ static enum flash_area fwu_go_nogo(void)
 			fwu->config_block_count * fwu->block_size,
 			img->config_size);
 		flash_area = NONE;
+	#ifndef CONFIG_PLATFORM_TINNO
 		goto exit;
 	}
 
@@ -825,6 +853,7 @@ static enum flash_area fwu_go_nogo(void)
 			"%s: In flash prog mode\n",
 			__func__);
 		flash_area = UI_FIRMWARE;
+	#endif
 		goto exit;
 	}
 
@@ -1678,6 +1707,10 @@ static int fwu_start_reflash(void)
 
 	/* reset device */
 	fwu_reset_device();
+	#ifdef CONFIG_PLATFORM_TINNO
+	msleep(200);
+	fwu_scan_pdt();
+	#endif
 
 	/* check device status */
 	retval = fwu_read_f01_device_status(&f01_device_status);

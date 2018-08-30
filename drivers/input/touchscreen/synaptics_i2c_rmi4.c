@@ -46,6 +46,15 @@
 #define RESET_DELAY 100
 
 #define TYPE_B_PROTOCOL
+#ifdef CONFIG_PLATFORM_TINNO
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+#define WAKEUP_GESTURE 1
+static struct input_dev *syna_key_dev;
+#define KEY_SY_SENSOR 251
+extern u8 gTGesture;
+extern int bEnTGesture;
+#endif
+#endif
 
 #define NO_0D_WHILE_2D
 /*
@@ -114,6 +123,14 @@ enum device_status {
 #define F12_MAX_X		65536
 #define F12_MAX_Y		65536
 
+#ifdef CONFIG_PLATFORM_TINNO
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+#define F11_CONTINUOUS_MODE 0x00
+#define F11_WAKEUP_GESTURE_MODE 0x04
+#define F12_CONTINUOUS_MODE 0x00
+#define F12_WAKEUP_GESTURE_MODE 0x02
+#endif
+#endif
 static int synaptics_rmi4_i2c_read(struct synaptics_rmi4_data *rmi4_data,
 		unsigned short addr, unsigned char *data,
 		unsigned short length);
@@ -412,9 +429,15 @@ struct synaptics_rmi4_f1a_handle {
 
 struct synaptics_rmi4_f12_extra_data {
 	unsigned char data1_offset;
+	#ifdef CONFIG_PLATFORM_TINNO
+	unsigned char data4_offset;
+	#endif
 	unsigned char data15_offset;
 	unsigned char data15_size;
 	unsigned char data15_data[(F12_FINGERS_TO_SUPPORT + 7) / 8];
+	#ifdef CONFIG_PLATFORM_TINNO
+	unsigned char ctrl20_offset;
+	#endif
 };
 
 struct synaptics_rmi4_exp_fn {
@@ -1126,6 +1149,10 @@ static void synaptics_rmi4_release_all(struct synaptics_rmi4_data *rmi4_data)
 
 	for (finger = 0; finger < max_num_fingers; finger++) {
 		input_mt_slot(rmi4_data->input_dev, finger);
+		#ifdef CONFIG_PLATFORM_TINNO
+		input_mt_report_slot_state(rmi4_data->input_dev,
+		                           MT_TOOL_FINGER, 1);
+		#endif
 		input_mt_report_slot_state(rmi4_data->input_dev,
 				MT_TOOL_FINGER, 0);
 	}
@@ -1169,6 +1196,11 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 	int wx;
 	int wy;
 	int z;
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	unsigned char detected_gestures;
+	unsigned char charstatus[8];
+	struct synaptics_rmi4_f11_extra_data *extra_data;
+#endif /*CONFIG_TGESTURE_FUNCTION*/
 
 	/*
 	 * The number of finger status registers is determined by the
@@ -1180,7 +1212,70 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 	num_of_finger_status_regs = (fingers_supported + 3) / 4;
 	data_addr = fhandler->full_addr.data_base;
 	data_reg_blk_size = fhandler->size_of_data_register_block;
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	extra_data = (struct synaptics_rmi4_f11_extra_data *)fhandler->extra;
+	if (rmi4_data->suspend && rmi4_data->enable_wakeup_gesture) {
+		retval = synaptics_rmi4_i2c_read(rmi4_data,
+		                                 data_addr + extra_data->data38_offset,
+		                                 &detected_gestures,
+		                                 sizeof(detected_gestures));
+		if (retval < 0)
+			return 0;
 
+		dev_dbg(&rmi4_data->i2c_client->dev,
+		        "detected_gestures is %d",detected_gestures);
+		if (1 ==detected_gestures) {
+			gTGesture ='u';
+			input_report_key(syna_key_dev,KEY_SY_SENSOR, 1);
+			input_report_key(syna_key_dev,KEY_SY_SENSOR, 0);
+			input_sync(syna_key_dev);
+			rmi4_data->sensor_sleep = false;
+		} else if(detected_gestures==0x40) {
+			retval = synaptics_rmi4_i2c_read(rmi4_data,
+			                                 data_addr + extra_data->data38_offset+1,
+			                                 charstatus,
+			                                 sizeof(charstatus));
+			if (retval < 0)
+				return 0;
+
+#ifdef CONFIG_S2333_IC
+			dev_dbg(&rmi4_data->i2c_client->dev,
+			        "charstatus [2] is %d",charstatus[2]);
+			switch (charstatus[2])
+#else
+			dev_dbg(&rmi4_data->i2c_client->dev,
+			        "charstatus [6] is %d",charstatus[6]);
+			switch (charstatus[6])
+#endif
+			{
+			case 0x63:
+				gTGesture ='c';
+				input_report_key(syna_key_dev,KEY_SY_SENSOR, 1);
+				input_report_key(syna_key_dev,KEY_SY_SENSOR, 0);
+				input_sync(syna_key_dev);
+				break;
+			case 0x6d:
+				gTGesture ='m';
+				input_report_key(syna_key_dev, KEY_SY_SENSOR, 1);
+				input_report_key(syna_key_dev, KEY_SY_SENSOR, 0);
+				input_sync(syna_key_dev);
+				break;
+				/*case 0x73:
+				    gTGesture ='s';
+				    input_report_key(syna_key_dev, KEY_SY_SENSOR, 1);
+				    input_report_key(syna_key_dev, KEY_SY_SENSOR, 0);
+				    input_sync(syna_key_dev);
+				    break;*/
+			}
+		} else if(detected_gestures==0x08) {
+			gTGesture ='o';
+			input_report_key(syna_key_dev, KEY_SY_SENSOR, 1);
+			input_report_key(syna_key_dev, KEY_SY_SENSOR, 0);
+			input_sync(syna_key_dev);
+		}
+		return 0;
+	}
+#endif /*CONFIG_TGESTURE_FUNCTION*/
 	retval = synaptics_rmi4_i2c_read(rmi4_data,
 			data_addr,
 			finger_status_reg,
@@ -1980,6 +2075,30 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
  * mask, and gathers finger data acquisition capabilities from the query
  * registers.
  */
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+static void synaptics_rmi4_set_intr_mask(struct synaptics_rmi4_fn *fhandler,
+        struct synaptics_rmi4_fn_desc *fd,
+        unsigned int intr_count)
+{
+	unsigned char ii;
+	unsigned char intr_offset;
+
+	fhandler->intr_reg_num = (intr_count + 7) / 8;
+	if (fhandler->intr_reg_num != 0)
+		fhandler->intr_reg_num -= 1;
+
+	/* Set an enable bit for each data source */
+	intr_offset = intr_count % 8;
+	fhandler->intr_mask = 0;
+	for (ii = intr_offset;
+	     ii < (fd->intr_src_count + intr_offset);
+	     ii++)
+		fhandler->intr_mask |= 1 << ii;
+
+	return;
+}
+#endif
+
 static int synaptics_rmi4_f11_init(struct synaptics_rmi4_data *rmi4_data,
 		struct synaptics_rmi4_fn *fhandler,
 		struct synaptics_rmi4_fn_desc *fd,
@@ -1993,6 +2112,17 @@ static int synaptics_rmi4_f11_init(struct synaptics_rmi4_data *rmi4_data,
 	unsigned char query[F11_STD_QUERY_LEN];
 	unsigned char control[F11_STD_CTRL_LEN];
 
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	unsigned char offset;
+	unsigned char fingers_supported;
+	struct synaptics_rmi4_f11_extra_data *extra_data;
+	struct synaptics_rmi4_f11_query_0_5 query_0_5;
+	struct synaptics_rmi4_f11_query_7_8 query_7_8;
+	struct synaptics_rmi4_f11_query_9 query_9;
+	struct synaptics_rmi4_f11_query_12 query_12;
+	struct synaptics_rmi4_f11_query_27 query_27;
+	struct synaptics_rmi4_f11_ctrl_6_9 control_6_9;
+#endif
 	fhandler->fn_number = fd->fn_number;
 	fhandler->num_of_data_sources = fd->intr_src_count;
 
@@ -2100,7 +2230,215 @@ static int synaptics_rmi4_f11_init(struct synaptics_rmi4_data *rmi4_data,
 	abs_data_size = query[5] & MASK_2BIT;
 	abs_data_blk_size = 3 + (2 * (abs_data_size == 0 ? 1 : 0));
 	fhandler->size_of_data_register_block = abs_data_blk_size;
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	fhandler->extra = kmalloc(sizeof(*extra_data), GFP_KERNEL);
+	if (!fhandler->extra) {
+		dev_err(&rmi4_data->i2c_client->dev,
+		        "%s: Failed to alloc mem for fhandler->extra\n",
+		        __func__);
+		return -ENOMEM;
+	}
+	extra_data = (struct synaptics_rmi4_f11_extra_data *)fhandler->extra;
+	retval = synaptics_rmi4_i2c_read(rmi4_data,
+	                                 fhandler->full_addr.query_base,
+	                                 query_0_5.data,
+	                                 sizeof(query_0_5.data));
+	if (retval < 0)
+		return retval;
 
+	/* Maximum number of fingers supported
+	if (query_0_5.num_of_fingers <= 4)
+		fhandler->num_of_data_points = query_0_5.num_of_fingers + 1;
+	else if (query_0_5.num_of_fingers == 5)
+		fhandler->num_of_data_points = 10;*/
+
+	rmi4_data->num_of_fingers = fhandler->num_of_data_points;
+
+	retval = synaptics_rmi4_i2c_read(rmi4_data,
+	                                 fhandler->full_addr.ctrl_base + 6,
+	                                 control_6_9.data,
+	                                 sizeof(control_6_9.data));
+	if (retval < 0)
+		return retval;
+
+	/* Maximum x and y
+	rmi4_data->sensor_max_x = control_6_9.sensor_max_x_pos_7_0 |
+			(control_6_9.sensor_max_x_pos_11_8 << 8);
+	rmi4_data->sensor_max_y = control_6_9.sensor_max_y_pos_7_0 |
+			(control_6_9.sensor_max_y_pos_11_8 << 8);
+	dev_dbg(&rmi4_data->i2c_client->dev,
+			"%s: Function %02x max x = %d max y = %d\n",
+			__func__, fhandler->fn_number,
+			rmi4_data->sensor_max_x,
+			rmi4_data->sensor_max_y);*/
+
+	rmi4_data->max_touch_width = MAX_F11_TOUCH_WIDTH;
+
+	synaptics_rmi4_set_intr_mask(fhandler, fd, intr_count);
+
+	fhandler->data = NULL;
+
+	offset = sizeof(query_0_5.data);
+
+	/* query 6 */
+	if (query_0_5.has_rel)
+		offset += 1;
+
+	/* queries 7 8 */
+	if (query_0_5.has_gestures) {
+		retval = synaptics_rmi4_i2c_read(rmi4_data,
+		                                 fhandler->full_addr.query_base + offset,
+		                                 query_7_8.data,
+		                                 sizeof(query_7_8.data));
+		if (retval < 0)
+			return retval;
+
+		offset += sizeof(query_7_8.data);
+	}
+
+	/* query 9 */
+	if (query_0_5.has_query_9) {
+		retval = synaptics_rmi4_i2c_read(rmi4_data,
+		                                 fhandler->full_addr.query_base + offset,
+		                                 query_9.data,
+		                                 sizeof(query_9.data));
+		if (retval < 0)
+			return retval;
+
+		offset += sizeof(query_9.data);
+	}
+
+	/* query 10 */
+	if (query_0_5.has_gestures && query_7_8.has_touch_shapes)
+		offset += 1;
+
+	/* query 11 */
+	if (query_0_5.has_query_11)
+		offset += 1;
+
+	/* query 12 */
+	if (query_0_5.has_query_12) {
+		retval = synaptics_rmi4_i2c_read(rmi4_data,
+		                                 fhandler->full_addr.query_base + offset,
+		                                 query_12.data,
+		                                 sizeof(query_12.data));
+		if (retval < 0)
+			return retval;
+
+		offset += sizeof(query_12.data);
+	}
+
+	/* query 13 */
+	if (query_0_5.has_jitter_filter)
+		offset += 1;
+
+	/* query 14 */
+	if (query_0_5.has_query_12 && query_12.has_general_information_2)
+		offset += 1;
+
+	/* queries 15 16 17 18 19 20 21 22 23 24 25 26*/
+	if (query_0_5.has_query_12 && query_12.has_physical_properties)
+		offset += 12;
+
+	/* query 27 */
+	if (query_0_5.has_query_27) {
+		retval = synaptics_rmi4_i2c_read(rmi4_data,
+		                                 fhandler->full_addr.query_base + offset,
+		                                 query_27.data,
+		                                 sizeof(query_27.data));
+		if (retval < 0)
+			return retval;
+
+		rmi4_data->f11_wakeup_gesture = query_27.has_wakeup_gesture;
+	}
+
+	if (!rmi4_data->f11_wakeup_gesture)
+		return retval;
+
+	/* data 0 */
+	fingers_supported = fhandler->num_of_data_points;
+	offset = (fingers_supported + 3) / 4;
+
+	/* data 1 2 3 4 5 */
+	offset += 5 * fingers_supported;
+
+	/* data 6 7 */
+	if (query_0_5.has_rel)
+		offset += 2 * fingers_supported;
+
+	/* data 8 */
+	if (query_0_5.has_gestures && query_7_8.data[0])
+		offset += 1;
+
+	/* data 9 */
+	if (query_0_5.has_gestures && (query_7_8.data[0] || query_7_8.data[1]))
+		offset += 1;
+
+	/* data 10 */
+	if (query_0_5.has_gestures &&
+	    (query_7_8.has_pinch || query_7_8.has_flick))
+		offset += 1;
+
+	/* data 11 12 */
+	if (query_0_5.has_gestures &&
+	    (query_7_8.has_flick || query_7_8.has_rotate))
+		offset += 2;
+
+	/* data 13 */
+	if (query_0_5.has_gestures && query_7_8.has_touch_shapes)
+		offset += (fingers_supported + 3) / 4;
+
+	/* data 14 15 */
+	if (query_0_5.has_gestures &&
+	    (query_7_8.has_scroll_zones ||
+	     query_7_8.has_multi_finger_scroll ||
+	     query_7_8.has_chiral_scroll))
+		offset += 2;
+
+	/* data 16 17 */
+	if (query_0_5.has_gestures &&
+	    (query_7_8.has_scroll_zones &&
+	     query_7_8.individual_scroll_zones))
+		offset += 2;
+
+	/* data 18 19 20 21 22 23 24 25 26 27 */
+	if (query_0_5.has_query_9 && query_9.has_contact_geometry)
+		offset += 10 * fingers_supported;
+
+	/* data 28 */
+	if (query_0_5.has_bending_correction ||
+	    query_0_5.has_large_object_suppression)
+		offset += 1;
+
+	/* data 29 30 31 */
+	if (query_0_5.has_query_9 && query_9.has_pen_hover_discrimination)
+		offset += 3;
+
+	/* data 32 */
+	if (query_0_5.has_query_12 &&
+	    query_12.has_small_object_detection_tuning)
+		offset += 1;
+
+	/* data 33 34 */
+	if (query_0_5.has_query_27 && query_27.f11_query27_b0)
+		offset += 2;
+
+	/* data 35 */
+	if (query_0_5.has_query_12 && query_12.has_8bit_w)
+		offset += fingers_supported;
+
+	/* data 36 */
+	if (query_0_5.has_bending_correction)
+		offset += 1;
+
+	/* data 37 */
+	if (query_0_5.has_query_27 && query_27.has_data_37)
+		offset += 1;
+
+	/* data 38 */
+	if (query_0_5.has_query_27 && query_27.has_wakeup_gesture)
+		extra_data->data38_offset = offset;
+#endif
 	return retval;
 }
 
@@ -2829,7 +3167,12 @@ static int synaptics_rmi4_query_device(struct synaptics_rmi4_data *rmi4_data)
 			}
 		}
 	}
-
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	if (rmi4_data->f11_wakeup_gesture || rmi4_data->f12_wakeup_gesture)
+		rmi4_data->enable_wakeup_gesture = WAKEUP_GESTURE;
+	else
+		rmi4_data->enable_wakeup_gesture = false;
+#endif
 flash_prog_mode:
 	rmi4_data->num_of_intr_regs = (intr_count + 7) / 8;
 	dev_dbg(&rmi4_data->i2c_client->dev,
@@ -2983,7 +3326,9 @@ static int synaptics_rmi4_reset_device(struct synaptics_rmi4_data *rmi4_data)
 				__func__);
 		return retval;
 	}
-
+	#ifdef CONFIG_PLATFORM_TINNO
+	synaptics_rmi4_sensor_wake(rmi4_data);
+	#endif
 	return 0;
 }
 
@@ -3337,9 +3682,15 @@ static int synaptics_rmi4_gpio_configure(struct synaptics_rmi4_data *rmi4_data,
 					rmi4_data->board->reset_gpio);
 				goto err_reset_gpio_dir;
 			}
-
+			#ifdef CONFIG_PLATFORM_TINNO
+			gpio_set_value(rmi4_data->board->reset_gpio, 0);
+			msleep(50);
+			gpio_set_value(rmi4_data->board->reset_gpio, 1);
+			msleep(120);
+			#else
 			gpio_set_value(rmi4_data->board->reset_gpio, 1);
 			msleep(rmi4_data->board->reset_delay);
+			#endif
 		} else
 			synaptics_rmi4_reset_command(rmi4_data);
 
@@ -3458,6 +3809,9 @@ static int synaptics_rmi4_probe(struct i2c_client *client,
 	rmi4_data->irq_enabled = false;
 	rmi4_data->fw_updating = false;
 	rmi4_data->suspended = false;
+	#ifdef CONFIG_PLATFORM_TINNO
+	rmi4_data->suspend = false;
+	#endif
 
 	rmi4_data->i2c_read = synaptics_rmi4_i2c_read;
 	rmi4_data->i2c_write = synaptics_rmi4_i2c_write;
@@ -3693,7 +4047,22 @@ static int synaptics_rmi4_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Failed to check configuration\n");
 		return retval;
 	}
-
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	syna_key_dev= input_allocate_device();
+	if (! syna_key_dev) {
+		dev_err(&client->dev,"[syna]SY_key_dev: fail!\n");
+	}
+	__set_bit(EV_KEY,  syna_key_dev->evbit);
+	__set_bit(KEY_SY_SENSOR,  syna_key_dev->keybit);
+	__set_bit(KEY_POWER,  syna_key_dev->keybit);
+	syna_key_dev->id.bustype = BUS_HOST;
+	syna_key_dev->name = "TPSYNA_GESTURE";
+	if(input_register_device(syna_key_dev)) {
+		dev_err(&client->dev,"[syna]SY_key_dev register : fail!\n");
+	} else {
+		dev_err(&client->dev,"[syna]SY_key_dev register : success!!\n");
+	}
+#endif
 	return retval;
 
 err_sysfs:
@@ -4180,6 +4549,130 @@ static int synaptics_rmi4_check_configuration(struct synaptics_rmi4_data
  * disables the interrupt, and turns off the power to the sensor.
  */
 #ifdef CONFIG_PM
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+static void synaptics_rmi4_f11_wg(struct synaptics_rmi4_data *rmi4_data,
+                                  bool enable)
+{
+	int retval;
+	unsigned char reporting_control;
+	struct synaptics_rmi4_fn *fhandler;
+	struct synaptics_rmi4_device_info *rmi;
+	int i;
+	rmi = &(rmi4_data->rmi4_mod_info);
+
+	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
+		if (fhandler->fn_number == SYNAPTICS_RMI4_F11)
+			break;
+	}
+
+	retval = synaptics_rmi4_i2c_read(rmi4_data,
+	                                 fhandler->full_addr.ctrl_base,
+	                                 &reporting_control,
+	                                 sizeof(reporting_control));
+	if (retval < 0) {
+		dev_err(&(rmi4_data->input_dev->dev),
+		        "%s: Failed to change reporting mode\n",
+		        __func__);
+		return;
+	}
+
+	reporting_control = (reporting_control & ~MASK_3BIT);
+	if (enable)
+		reporting_control |= F11_WAKEUP_GESTURE_MODE;
+	else
+		reporting_control |= F11_CONTINUOUS_MODE;
+
+	retval = synaptics_rmi4_i2c_write(rmi4_data,
+	                                  fhandler->full_addr.ctrl_base,
+	                                  &reporting_control,
+	                                  sizeof(reporting_control));
+	if (retval < 0) {
+		dev_err(&(rmi4_data->input_dev->dev),
+		        "%s: Failed to change reporting mode\n",
+		        __func__);
+		return;
+	}
+	for (i = 0; i < fhandler->num_of_data_points; i++) {
+#ifdef TYPE_B_PROTOCOL
+		input_mt_slot(rmi4_data->input_dev, i);
+		input_mt_report_slot_state(rmi4_data->input_dev,
+		                           MT_TOOL_FINGER, 0);
+#endif
+	}
+	input_mt_report_pointer_emulation(rmi4_data->input_dev, false);
+	input_sync(rmi4_data->input_dev);
+	return;
+}
+
+static void synaptics_rmi4_f12_wg(struct synaptics_rmi4_data *rmi4_data,
+                                  bool enable)
+{
+	int retval;
+	unsigned char offset;
+	unsigned char reporting_control[3];
+	struct synaptics_rmi4_f12_extra_data *extra_data;
+	struct synaptics_rmi4_fn *fhandler;
+	struct synaptics_rmi4_device_info *rmi;
+	int i;
+	rmi = &(rmi4_data->rmi4_mod_info);
+
+	list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
+		if (fhandler->fn_number == SYNAPTICS_RMI4_F12)
+			break;
+	}
+
+	extra_data = (struct synaptics_rmi4_f12_extra_data *)fhandler->extra;
+	offset = extra_data->ctrl20_offset;
+
+	retval = synaptics_rmi4_i2c_read(rmi4_data,
+	                                 fhandler->full_addr.ctrl_base + offset,
+	                                 reporting_control,
+	                                 sizeof(reporting_control));
+	if (retval < 0) {
+		dev_err(&(rmi4_data->input_dev->dev),
+		        "%s: Failed to change reporting mode\n",
+		        __func__);
+		return;
+	}
+
+	if (enable)
+		reporting_control[2] = F12_WAKEUP_GESTURE_MODE;
+	else
+		reporting_control[2] = F12_CONTINUOUS_MODE;
+
+	retval = synaptics_rmi4_i2c_write(rmi4_data,
+	                                  fhandler->full_addr.ctrl_base + offset,
+	                                  reporting_control,
+	                                  sizeof(reporting_control));
+	if (retval < 0) {
+		dev_err(&(rmi4_data->input_dev->dev),
+		        "%s: Failed to change reporting mode\n",
+		        __func__);
+		return;
+	}
+	for (i = 0; i < fhandler->num_of_data_points; i++) {
+#ifdef TYPE_B_PROTOCOL
+		input_mt_slot(rmi4_data->input_dev, i);
+		input_mt_report_slot_state(rmi4_data->input_dev,
+		                           MT_TOOL_FINGER, 0);
+#endif
+	}
+	input_mt_report_pointer_emulation(rmi4_data->input_dev, false);
+	input_sync(rmi4_data->input_dev);
+	return;
+}
+
+static void synaptics_rmi4_wakeup_gesture(struct synaptics_rmi4_data *rmi4_data,
+        bool enable)
+{
+	if (rmi4_data->f11_wakeup_gesture)
+		synaptics_rmi4_f11_wg(rmi4_data, enable);
+	else if (rmi4_data->f12_wakeup_gesture)
+		synaptics_rmi4_f12_wg(rmi4_data, enable);
+
+	return;
+}
+#endif
 static int synaptics_rmi4_suspend(struct device *dev)
 {
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
@@ -4195,6 +4688,32 @@ static int synaptics_rmi4_suspend(struct device *dev)
 		dev_info(dev, "Already in suspend state\n");
 		return 0;
 	}
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	if (rmi4_data->enable_wakeup_gesture&&bEnTGesture) {
+		synaptics_rmi4_wakeup_gesture(rmi4_data, true);
+		enable_irq_wake(rmi4_data->irq);
+		if (rmi4_data->board->disable_gpios) {
+			if (rmi4_data->ts_pinctrl) {
+				retval = pinctrl_select_state(rmi4_data->ts_pinctrl,
+				                              rmi4_data->pinctrl_state_active);
+				if (retval < 0)
+					dev_err(dev, "failed to select default pinctrl state\n");
+			}
+
+			retval = synaptics_rmi4_gpio_configure(rmi4_data, false);
+			if (retval < 0) {
+				dev_err(dev, "Failed to put gpios in active state\n");
+				if (rmi4_data->ts_pinctrl) {
+					retval = pinctrl_select_state(rmi4_data->ts_pinctrl,
+					                              rmi4_data->pinctrl_state_active);
+					if (retval < 0)
+						dev_err(dev, "failed to select get default pinctrl state\n");
+				}
+			}
+		}
+		goto exit;
+	}
+#endif
 
 	synaptics_secure_touch_stop(rmi4_data, 1);
 
@@ -4233,6 +4752,10 @@ static int synaptics_rmi4_suspend(struct device *dev)
 			goto err_gpio_configure;
 		}
 	}
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+exit:
+	rmi4_data->suspend = true;
+#endif
 	rmi4_data->suspended = true;
 
 	return 0;
@@ -4278,7 +4801,32 @@ static int synaptics_rmi4_resume(struct device *dev)
 		dev_info(dev, "Already in awake state\n");
 		return 0;
 	}
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+	if (rmi4_data->enable_wakeup_gesture&&bEnTGesture) {
+		synaptics_rmi4_wakeup_gesture(rmi4_data, false);
+		disable_irq_wake(rmi4_data->irq);
+		if (rmi4_data->board->disable_gpios) {
+			if (rmi4_data->ts_pinctrl) {
+				retval = pinctrl_select_state(rmi4_data->ts_pinctrl,
+				                              rmi4_data->pinctrl_state_active);
+				if (retval < 0)
+					dev_err(dev, "failed to select default pinctrl state\n");
+			}
 
+			retval = synaptics_rmi4_gpio_configure(rmi4_data, true);
+			if (retval < 0) {
+				dev_err(dev, "Failed to put gpios in active state\n");
+				if (rmi4_data->ts_pinctrl) {
+					retval = pinctrl_select_state(rmi4_data->ts_pinctrl,
+					                              rmi4_data->pinctrl_state_suspend);
+					if (retval < 0)
+						pr_err("failed to select idle pinctrl state\n");
+				}
+			}
+		}
+		goto exit;
+	}
+#endif
 	synaptics_secure_touch_stop(rmi4_data, 1);
 
 	retval = synaptics_rmi4_regulator_lpm(rmi4_data, false);
@@ -4311,6 +4859,10 @@ static int synaptics_rmi4_resume(struct device *dev)
 		dev_err(dev, "Failed to check configuration\n");
 		goto err_check_configuration;
 	}
+#ifdef CONFIG_SYNA_TGESTURE_FUNCTION
+exit:
+	rmi4_data->suspend = false;
+#endif
 	rmi4_data->suspended = false;
 
 	return 0;
