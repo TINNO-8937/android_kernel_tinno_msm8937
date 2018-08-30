@@ -1135,7 +1135,25 @@ config TP_TGESTURE
 
           If unsure, say N.
 
+
+
+config S2333_IC
+	bool "syna s2333 ic "
+	default n
+	help
+	  Say Y here if you use syna s2333 ic.
+
+          If unsure, say N.
+
 config FT5XX_TGESTURE_FUNCTION
+	bool "syna tgesture function"
+	default n
+	help
+	  Say Y here if you use syna TP gesture function.
+
+          If unsure, say N.
+
+config SYNA_TGESTURE_FUNCTION
 	bool "syna tgesture function"
 	default n
 	help
