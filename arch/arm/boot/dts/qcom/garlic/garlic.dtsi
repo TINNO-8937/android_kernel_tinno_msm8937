@@ -235,6 +235,31 @@
 			focaltech,fw-auto-cal;
 			focaltech,ignore-id-check;
 		};
+		
+		synaptics@39 {
+				compatible = "synaptics,rmi4";
+				reg = <0x39>;
+				interrupt-parent = <&tlmm>;
+				interrupts = <65 0x2008>;
+		                vdd-supply = <&pm8937_l10>;
+		                vcc_i2c-supply = <&pm8937_l5>;
+				// pins used by touchscreen 
+				pinctrl-names = "pmx_ts_active","pmx_ts_suspend";
+				pinctrl-0 = <&ts_int_active &ts_reset_active>;
+				pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
+				synaptics,display-coords = <0 0 1080 1920>;
+				synaptics,panel-coords = <0 0 1080 1920>;
+				synaptics,irq-gpio = <&tlmm 65 0x2008>;
+				synaptics,reset-gpio = <&tlmm 64 0x0>;
+				synaptics,power-gpio = <&tlmm 68 0x0>;
+				synaptics,i2c-pull-up;
+				synaptics,power-down;
+				synaptics,disable-gpios;
+		                synaptics,power-delay-ms = <160>;
+		                synaptics,reset-delay-ms = <100>;
+				synaptics,fw-image-name = "YEJI_PR1723210-S3202_TINNO_P7021.img";
+				//synaptics,fw-image-name-ttouch = "";
+		};
 };
 
 &i2c_2{
