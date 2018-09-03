@@ -4067,7 +4067,6 @@ static void dwc3_msm_otg_sm_work(struct work_struct *w)
 				pm_relax(mdwc->dev);
 				break;
 			#else
-			case DWC3_DCP_CHARGER:
 			case DWC3_PROPRIETARY_CHARGER:
 				dbg_event(0xFF, "DCPCharger", 0);
 				dwc3_msm_gadget_vbus_draw(mdwc,
