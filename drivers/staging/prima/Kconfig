@@ -15,6 +15,10 @@ config PRONTO_WLAN
 	Add support for the Qualcomm Atheros Pronto WLAN module
 
 
+config QCOM_TDLS
+	bool "Enable TDLS feature"
+	default n
+
 #	depends on WLAN
 #	depends on CFG80211
 #        depends on WCNSS_CORE
@@ -39,10 +43,6 @@ config PRIMA_WLAN_11AC_HIGH_TP
 
 config WLAN_FEATURE_11W
 	bool "Enable the WLAN 802.11w Protected Management Frames feature"
-	default n
-
-config QCOM_TDLS
-	bool "Enable TDLS feature"
 	default n
 
 config QCOM_VOWIFI_11R
