@@ -352,7 +352,6 @@ struct msm_otg_platform_data {
 	bool vbus_low_as_hostmode;
 	int charging_current_limit;
 	enum floated_chg_type enable_floated_charger;
-	bool enable_sdp_typec_current_limit;
 };
 
 /* phy related flags */
