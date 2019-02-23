@@ -1,3 +1,6 @@
+#ifdef CONFIG_PROJECT_GARLIC
+#include "msmb_pproc_n.h"
+#else
 #ifndef __MSMB_PPROC_H
 #define __MSMB_PPROC_H
 
@@ -152,4 +155,4 @@ struct msm_camera_v4l2_ioctl32_t {
 #endif
 
 #endif
-
+#endif /* CONFIG_PROJECT_GARLIC */

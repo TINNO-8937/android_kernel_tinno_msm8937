@@ -1,3 +1,6 @@
+#ifdef CONFIG_PROJECT_GARLIC
+#include "msmb_camera_n.h"
+#else
 #ifndef __LINUX_MSMB_CAMERA_H
 #define __LINUX_MSMB_CAMERA_H
 
@@ -22,4 +25,5 @@
 #endif
 
 #endif
+#endif /* CONFIG_PROJECT_GARLIC */
 
