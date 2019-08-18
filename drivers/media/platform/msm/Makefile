@@ -5,7 +5,7 @@
 obj-$(CONFIG_MSM_VIDC_V4L2) += vidc/
 obj-y += broadcast/
 obj-$(CONFIG_DVB_MPQ) += dvb/
-ifeq ($(CONFIG_PROJECT_GARLIC),y)
+ifneq (,$(filter y,$(CONFIG_PROJECT_GARLIC)$(CONFIG_PROJECT_WIMLITE)))
 obj-$(CONFIG_MSMB_CAMERA) += camera_v2_n/
 else
 obj-$(CONFIG_MSMB_CAMERA) += camera_v2/
