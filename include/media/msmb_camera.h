@@ -1,4 +1,4 @@
-#ifdef CONFIG_PROJECT_GARLIC
+#if defined(CONFIG_PROJECT_CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE)
 #include "msmb_camera_n.h"
 #else
 #ifndef __LINUX_MSMB_CAMERA_H
@@ -25,5 +25,5 @@
 #endif
 
 #endif
-#endif /* CONFIG_PROJECT_GARLIC */
+#endif /* CONFIG_PROJECT_GARLIC || CONFIG_PROJECT_WIMLITE*/
 

@@ -7,7 +7,7 @@ obj-y += broadcast/
 obj-$(CONFIG_DVB_MPQ) += dvb/
 ifeq ($(CONFIG_PROJECT_GARLIC),y)
 obj-$(CONFIG_MSMB_CAMERA) += camera_v2_n/
-else
-obj-$(CONFIG_MSMB_CAMERA) += camera_v2/
+else ifeq ($(CONFIG_PROJECT_WIMLITE),y)
+obj-$(CONFIG_MSMB_CAMERA) += camera_v2_n/
 endif
 obj-y += sde/

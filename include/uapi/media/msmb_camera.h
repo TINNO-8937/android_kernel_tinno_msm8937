@@ -1,4 +1,4 @@
-#ifdef CONFIG_PROJECT_GARLIC
+#if defined(CONFIG_PROJECT_CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE)
 #include "msmb_camera_n.h"
 #else
 #ifndef __UAPI_LINUX_MSMB_CAMERA_H
@@ -227,4 +227,4 @@ struct msm_camera_private_ioctl_arg {
 	_IOWR('V', BASE_VIDIOC_PRIVATE, struct msm_camera_private_ioctl_arg)
 
 #endif
-#endif /* CONFIG_PROJECT_GARLIC */
+#endif /* CONFIG_PROJECT_GARLIC || CONFIG_PROJECT_WIMLITE*/

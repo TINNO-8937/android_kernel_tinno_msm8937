@@ -1,4 +1,4 @@
-#ifdef CONFIG_PROJECT_GARLIC
+#if defined(CONFIG_PROJECT_CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE)
 #include "msm_cam_sensor_n.h"
 #else
 #ifndef __LINUX_MSM_CAM_SENSOR_H
@@ -282,4 +282,4 @@ struct msm_flash_cfg_data_t32 {
 #endif
 
 #endif
-#endif /* CONFIG_PROJECT_GARLIC */
+#endif /* CONFIG_PROJECT_GARLIC || CONFIG_PROJECT_WIMLITE*/

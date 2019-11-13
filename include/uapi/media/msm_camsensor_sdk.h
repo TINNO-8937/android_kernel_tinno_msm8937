@@ -1,4 +1,4 @@
-#ifdef CONFIG_PROJECT_GARLIC
+#if defined(CONFIG_PROJECT_CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE)
 #include "msm_camsensor_sdk_n.h"
 #else
 #ifndef __UAPI_LINUX_MSM_CAMSENSOR_SDK_H
@@ -421,4 +421,4 @@ struct msm_camera_i2c_reg_setting_array {
 };
 
 #endif
-#endif /* CONFIG_PROJECT_GARLIC */
+#endif /* CONFIG_PROJECT_GARLIC || CONFIG_PROJECT_WIMLITE*/

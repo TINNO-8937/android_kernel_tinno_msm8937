@@ -9,7 +9,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifdef CONFIG_PROJECT_GARLIC
+#if defined(CONFIG_PROJECT_CONFIG_PROJECT_GARLIC) || defined(CONFIG_PROJECT_WIMLITE)
 #include "msmb_isp_n.h"
 #else
 #ifndef __MSMB_ISP__
@@ -46,4 +46,4 @@ struct msm_isp32_event_data32 {
 
 #endif
 #endif /* __MSMB_ISP__ */
-#endif /* CONFIG_PROJECT_GARLIC */
+#endif /* CONFIG_PROJECT_GARLIC || CONFIG_PROJECT_WIMLITE*/
