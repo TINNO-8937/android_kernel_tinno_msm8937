@@ -14,6 +14,7 @@
 #include "wimlite-mdss-panels.dtsi"
 #include "wimlite-pinctrl.dtsi"
 #include "wimlite-audio.dtsi"
+#include "../garlic/garlic-camera.dtsi"
 #include "wimlite-camera-sensor.dtsi"
 
 /delete-node/ &mtp_batterydata;
