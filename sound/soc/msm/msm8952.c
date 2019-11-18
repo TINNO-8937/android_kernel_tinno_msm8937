@@ -2870,6 +2870,7 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		/* tfa98xx: nxp smart pa for speaker */
 		.codec_dai_name = "tfa98xx-aif-2-34",
 		.codec_name = "tfa98xx.2-0034",
+		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA20,
 	},
 	#endif
 	{/* hw:x,38 */
