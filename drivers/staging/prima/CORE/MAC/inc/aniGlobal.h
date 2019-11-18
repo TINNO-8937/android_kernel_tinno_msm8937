@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014, 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, 2017-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -243,6 +243,7 @@ typedef struct sLimTimers
      * for a period of time on a particular DFS channel
      */
     TX_TIMER           gLimActiveToPassiveChannelTimer;
+    TX_TIMER           g_lim_ap_ecsa_timer;
 //********************TIMER SECTION ENDS**************************************************
 // ALL THE FIELDS BELOW THIS CAN BE ZEROED OUT in limInitialize
 //****************************************************************************************
@@ -377,6 +378,12 @@ typedef struct sAniSirLim
     tSirMacAddr         gSelfMacAddr;   //added for BT-AMP Support 
     tSirMacAddr         spoofMacAddr;   //added for Mac Addr Spoofing support
     tANI_U8             isSpoofingEnabled;
+
+    /*
+     * @spoof_mac_oui = true when VENDOR_SUBCMD_MAC_OUI is invoked for
+     * mac spoofing.
+     */
+    bool                spoof_mac_oui;
 
     //////////////////////////////////////////     BSS RELATED END ///////////////////////////////////////////
     // Place holder for StartBssReq message
@@ -901,6 +908,8 @@ tLimMlmOemDataRsp       *gpLimMlmOemDataRsp;
     tANI_U8 gLimIbssStaLimit;
     tANI_U8 probeCounter;
     tANI_U8 maxProbe;
+    VOS_STATUS(*sme_msg_callback)
+            (tHalHandle hal, vos_msg_t *msg);
     tANI_U8 retryPacketCnt;
 
     // Flag to debug remain on channel
@@ -1099,6 +1108,8 @@ typedef struct sAniSirGlobal
 #endif /* SAP_AUTH_OFFLOAD */
    bool max_power_cmd_pending;
    uint32_t sta_auth_retries_for_code17;
+   uint32_t sta_sap_scc_on_dfs_chan;
+   bool force_scc_with_ecsa;
 } tAniSirGlobal;
 
 #ifdef FEATURE_WLAN_TDLS

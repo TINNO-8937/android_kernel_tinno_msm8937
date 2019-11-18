@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -722,6 +722,9 @@ tBssSystemRole wdaGetGlobalSystemRole(tpAniSirGlobal pMac);
 /* WDA_GET_RX_ADDR3_IDX ******************************************************/
 #  define WDA_GET_RX_ADDR3_IDX(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->addr3Idx)
 
+/* WDA_GET_RX_ADDR1_IDX ******************************************************/
+#  define WDA_GET_RX_ADDR1_IDX(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->addr1Idx)
+
 /* WDA_GET_RX_CH *************************************************************/
 #  define WDA_GET_RX_CH(pRxMeta) (((WDI_DS_RxMetaInfoType*)(pRxMeta))->rxChannel)
 
@@ -794,6 +797,8 @@ tBssSystemRole wdaGetGlobalSystemRole(tpAniSirGlobal pMac);
 
 #define WLANWDA_HO_IS_AN_AMPDU                    0x4000
 #define WLANWDA_HO_LAST_MPDU_OF_AMPDU             0x400
+
+#define WDA_MAX_MGMT_MPDU_LEN             2000
 
 /* WDA_IS_RX_AN_AMPDU ********************************************************/
 #  define WDA_IS_RX_AN_AMPDU(pRxMeta)       \
@@ -1105,6 +1110,9 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define WDA_EXIT_UAPSD_RSP             SIR_HAL_EXIT_UAPSD_RSP
 #define WDA_LOW_RSSI_IND               SIR_HAL_LOW_RSSI_IND 
 #define WDA_BEACON_FILTER_IND          SIR_HAL_BEACON_FILTER_IND
+#define WDA_VOWIFI_MODE                SIR_HAL_VOWIFI_MODE
+#define WDA_QPOWER                     SIR_HAL_QPOWER
+
 /// PE <-> HAL WOWL messages
 #define WDA_WOWL_ADD_BCAST_PTRN        SIR_HAL_WOWL_ADD_BCAST_PTRN
 #define WDA_WOWL_DEL_BCAST_PTRN        SIR_HAL_WOWL_DEL_BCAST_PTRN
@@ -1138,8 +1146,6 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
 #define WDA_SET_MAX_TX_POWER_PER_BAND_REQ \
         SIR_HAL_SET_MAX_TX_POWER_PER_BAND_REQ
-#define WDA_SET_MAX_TX_POWER_PER_BAND_RSP \
-        SIR_HAL_SET_MAX_TX_POWER_PER_BAND_RSP
 
 #define WDA_SEND_MSG_COMPLETE          SIR_HAL_SEND_MSG_COMPLETE 
 
@@ -2058,28 +2064,17 @@ VOS_STATUS WDA_HALDumpCmdReq(tpAniSirGlobal   pMac,tANI_U32 cmd,
                  tANI_U32   arg1, tANI_U32   arg2, tANI_U32   arg3,
                  tANI_U32   arg4, tANI_U8   *pBuffer, wpt_boolean async);
 
-/*==========================================================================
-   FUNCTION    WDA_featureCapsExchange
-
-  DESCRIPTION
-    WDA API to invoke capability exchange between host and FW
-
-  DEPENDENCIES
-
-  PARAMETERS
-
-   IN
-    pVosContext         VOS context
-
-   OUT
-    NONE
-
-  RETURN VALUE
-    NONE
-    
-  SIDE EFFECTS
-============================================================================*/
-void WDA_featureCapsExchange(v_PVOID_t pVosContext);
+/**
+ * WDA_featureCapsExchange() - WDA API to invoke capability exchange between
+ * host and FW
+ * @pVosContext: VOS context
+ * @request: Request to hold call-back to be invoked for response
+ *
+ * Return: VOS_STATUS
+ */
+VOS_STATUS
+WDA_featureCapsExchange(v_PVOID_t pVosContext,
+			struct sir_feature_caps_params *request);
 
 void WDA_disableCapablityFeature(tANI_U8 feature_index);
 /*==========================================================================

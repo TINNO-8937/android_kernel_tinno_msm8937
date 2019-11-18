@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1069,7 +1069,7 @@ tAniSirCgStatic cfgStatic[CFG_PARAM_MAX_NUM] =
      WNI_CFG_ADDBA_REQ_DECLINE_STAMAX,
      WNI_CFG_ADDBA_REQ_DECLINE_STADEF},
     {WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC,
-     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT | CFG_CTL_NTF_LIM,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
      WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC_STAMIN,
      WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC_STAMAX,
      WNI_CFG_DEL_ALL_RX_TX_BA_SESSIONS_2_4_G_BTC_STADEF},
@@ -1733,6 +1733,31 @@ tAniSirCgStatic cfgStatic[CFG_PARAM_MAX_NUM] =
      WNI_CFG_TRIGGER_NULLFRAME_BEFORE_HB_MIN,
      WNI_CFG_TRIGGER_NULLFRAME_BEFORE_HB_MAX,
      WNI_CFG_TRIGGER_NULLFRAME_BEFORE_HB_DEF},
+    {WNI_CFG_ENABLE_POWERSAVE_OFFLOAD,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
+     WNI_CFG_ENABLE_POWERSAVE_OFFLOAD_MIN,
+     WNI_CFG_ENABLE_POWERSAVE_OFFLOAD_MAX,
+     WNI_CFG_ENABLE_POWERSAVE_OFFLOAD_DEF},
+    {WNI_CFG_BTC_2M_DYN_LONG_WLAN_LEN,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
+     WNI_CFG_BTC_2M_DYN_LONG_WLAN_LEN_MIN,
+     WNI_CFG_BTC_2M_DYN_LONG_WLAN_LEN_MAX,
+     WNI_CFG_BTC_2M_DYN_LONG_WLAN_LEN_DEF},
+    {WNI_CFG_BTC_2M_DYN_LONG_BT_LEN,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_LEN_MIN,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_LEN_MAX,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_LEN_DEF},
+    {WNI_CFG_BTC_2M_DYN_LONG_BT_EXT_LEN,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_EXT_LEN_MIN,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_EXT_LEN_MAX,
+     WNI_CFG_BTC_2M_DYN_LONG_BT_EXT_LEN_DEF},
+    {WNI_CFG_BTC_2M_DYN_LONG_NUM_BT_EXT,
+     CFG_CTL_VALID | CFG_CTL_RE | CFG_CTL_WE | CFG_CTL_INT,
+     WNI_CFG_BTC_2M_DYN_LONG_NUM_BT_EXT_MIN,
+     WNI_CFG_BTC_2M_DYN_LONG_NUM_BT_EXT_MAX,
+     WNI_CFG_BTC_2M_DYN_LONG_NUM_BT_EXT_DEF},
 };
 
 tAniSirCfgStaticString cfgStaticString[CFG_MAX_STATIC_STRING] =
@@ -2131,6 +2156,14 @@ ProcDnldRsp(tpAniSirGlobal pMac, tANI_U16 length, tANI_U32 *pParam)
     PELOGW(cfgLog(pMac, LOGW, FL("CFG hdr totParams %d intParams %d strBufSize %d/%d"),
            pHdr->controlSize, pHdr->iBufSize, pHdr->sBufSize, pMac->cfg.gCfgMaxSBufSize);)
 
+    if (pHdr->sBufSize > (UINT_MAX -
+        (((CFG_PARAM_MAX_NUM + 3 * pMac->cfg.gCfgMaxIBufSize) << 2) +
+        sizeof(tCfgBinHdr)))) {
+        PELOGW(cfgLog(pMac, LOGW, FL("Invalid sBufSize coming from fw %d"),
+               pHdr->sBufSize);)
+        retVal = WNI_CFG_INVALID_LEN;
+        goto end;
+    }
     expLen = ((CFG_PARAM_MAX_NUM + 3 * pMac->cfg.gCfgMaxIBufSize) << 2) +
              pHdr->sBufSize + sizeof(tCfgBinHdr);
 
@@ -2493,7 +2526,8 @@ ProcSetReqInternal(tpAniSirGlobal pMac, tANI_U16 length, tANI_U32 *pParam, tANI_
                 // Process string parameter
                 else
                 {
-                    if (valueLenRoundedUp4 > length)
+                    if ((valueLenRoundedUp4 > length) ||
+                        (valueLen > CFG_MAX_STR_LEN))
                     {
                         PELOGE(cfgLog(pMac, LOGE, FL("Invalid string length %d"
                                "in set param %d (tot %d)"), valueLen,

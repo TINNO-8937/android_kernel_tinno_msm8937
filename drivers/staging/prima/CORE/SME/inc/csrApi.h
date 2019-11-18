@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -296,6 +296,8 @@ typedef struct tagCsrScanRequest
     tANI_U32 restTime;      //in units of milliseconds  //ignored when not connected
     tANI_U32 uIEFieldLen;
     tANI_U8 *pIEField;
+    bool scan_randomize;
+    bool nl_scan;
     eCsrRequestType requestType;    //11d scan or full scan
     tANI_BOOLEAN p2pSearch;
     tANI_BOOLEAN skipDfsChnlInP2pSearch;
@@ -406,6 +408,7 @@ typedef struct tagCsrScanResultFilter
     tANI_BOOLEAN isPERRoamScan;
 #endif
     tCsrBssid bssid_hint;
+    bool ignore_pmf_cap;
 }tCsrScanResultFilter;
 
 
@@ -520,6 +523,9 @@ typedef enum
     eCSR_ROAM_UPDATE_MAX_RATE_IND,
     eCSR_ROAM_LOST_LINK_PARAMS_IND,
     eCSR_ROAM_UPDATE_SCAN_RESULT,
+    eCSR_ROAM_ECSA_BCN_TX_IND,
+    eCSR_ROAM_ECSA_CHAN_CHANGE_RSP,
+    eCSR_ROAM_STA_CHANNEL_SWITCH,
 }eRoamCmdStatus;
 
 
@@ -959,6 +965,7 @@ typedef struct tagCsrRoamProfile
     tVOS_CON_MODE csrPersona;
     bool force_24ghz_in_ht20;
     tCsrBssid bssid_hint;
+    bool force_rsne_override;
 }tCsrRoamProfile;
 
 
@@ -1245,6 +1252,11 @@ typedef struct tagCsrConfigParam
     uint32_t edca_be_aifs;
     tANI_BOOLEAN disable_scan_during_sco;
     uint32_t sta_auth_retries_for_code17;
+    uint32_t sta_sap_scc_on_dfs_chan;
+    tANI_U8 agg_btc_sco_oui[3];
+    tANI_U8 num_ba_buff_btc_sco;
+    tANI_U8 num_ba_buff;
+    bool force_scc_with_ecsa;
 }tCsrConfigParam;
 
 //Tush
@@ -1342,6 +1354,9 @@ typedef struct tagCsrRoamInfo
     tDot11fIEVHTOperation vht_operation;
     tDot11fIEHTInfo ht_operation;
     bool reassoc;
+    struct sir_channel_chanege_rsp *ap_chan_change_rsp;
+    tSirSmeChanInfo chan_info;
+    tSirMacHTChannelWidth ch_width;
 }tCsrRoamInfo;
 
 typedef struct tagCsrFreqScanInfo
@@ -1371,6 +1386,10 @@ typedef struct sSirSmeAssocIndToUpperLayerCnf
     tANI_U8              HT40MHzIntoEnabledSta; //set to true if 40 MHz Intolerant enabled STA
 #endif
     uint32_t             rate_flags;
+    tSirSmeChanInfo      chan_info;
+    tSirMacHTChannelWidth ch_width;
+    tDot11fIEHTCaps HTCaps;
+    tDot11fIEVHTCaps VHTCaps;
 } tSirSmeAssocIndToUpperLayerCnf, *tpSirSmeAssocIndToUpperLayerCnf;
 
 typedef struct tagCsrSummaryStatsInfo
@@ -1778,5 +1797,12 @@ eHalStatus csrSetBand(tHalHandle hHal, eCsrBand eBand);
 ---------------------------------------------------------------------------*/
 eCsrBand csrGetCurrentBand (tHalHandle hHal);
 
+/**
+ * csrConvertCBIniValueToPhyCBState() - convert ini CB value to Phy CB val
+ * @cb_ini_value: ini value of cb mode
+ *
+ * Return: phy CB val
+ */
+ePhyChanBondState csrConvertCBIniValueToPhyCBState(v_U32_t cb_ini_val);
 #endif
 
