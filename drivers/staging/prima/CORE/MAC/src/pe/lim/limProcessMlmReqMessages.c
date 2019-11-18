@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -176,6 +176,7 @@ limProcessMlmReqMessages(tpAniSirGlobal pMac, tpSirMsgQ Msg)
                                             break;
         case SIR_LIM_DISASSOC_ACK_TIMEOUT:  limProcessDisassocAckTimeout(pMac); break;
         case SIR_LIM_DEAUTH_ACK_TIMEOUT:    limProcessDeauthAckTimeout(pMac); break;
+        case SIR_LIM_SAP_ECSA_TIMEOUT:      lim_process_ap_ecsa_timeout(pMac);break;
         case LIM_MLM_ADDBA_REQ:             limProcessMlmAddBAReq( pMac, Msg->bodyptr ); break;
         case LIM_MLM_ADDBA_RSP:             limProcessMlmAddBARsp( pMac, Msg->bodyptr ); break;
         case LIM_MLM_DELBA_REQ:             limProcessMlmDelBAReq( pMac, Msg->bodyptr ); break;
@@ -395,6 +396,43 @@ limChangeChannelWithCallback(tpAniSirGlobal pMac, tANI_U8 newChannel,
     return;
 }
 
+/**
+ * lim_is_spoofing_needed() - Check whether spoofing is needed for scan
+ * @mac: Pointer to mac
+ *
+ * Return: If spoofing is needed then return true else false.
+ */
+static bool lim_is_spoofing_needed(tpAniSirGlobal mac)
+{
+	/*
+	 * If mac spoofing response from firmware is not enabled
+	 * then disable spoofing.
+	 */
+	if (!mac->lim.isSpoofingEnabled)
+		return false;
+
+	/*
+	 * If all the octets of spoof mac-address are zero
+	 * then disable spoofing.
+	 */
+	if (vos_is_macaddr_zero((v_MACADDR_t *)&mac->lim.spoofMacAddr))
+		return false;
+
+	/*
+	 * If disableP2PMacSpoof is enabled and scan is P2P scan
+	 * then disable spoofing.
+	 */
+	if (mac->roam.configParam.disableP2PMacSpoofing &&
+	    mac->lim.gpLimMlmScanReq->p2pSearch)
+		return false;
+
+	/* Randomize NL (cfg80211) scan only when scan_randomize is set */
+	if (mac->lim.gpLimMlmScanReq->nl_scan)
+		return mac->lim.gpLimMlmScanReq->scan_randomize;
+
+	/* Randomize all other scans only when spoof_mac_oui is set */
+	return mac->lim.spoof_mac_oui;
+}
 
 /**
  * limContinuePostChannelScan()
@@ -455,23 +493,16 @@ void limContinuePostChannelScan(tpAniSirGlobal pMac)
          */
         do
         {
-            tSirMacAddr         gSelfMacAddr;
+            tSirMacAddr gSelfMacAddr;
+            bool        spoof = lim_is_spoofing_needed(pMac);
 
-            /* Send self MAC as src address if
-             * MAC spoof is not enabled OR
-             * spoofMacAddr is all 0 OR
-             * disableP2PMacSpoof is enabled and scan is P2P scan
-             * else use the spoofMac as src address
-             */
-            if ((pMac->lim.isSpoofingEnabled != TRUE) ||
-                (TRUE ==
-                vos_is_macaddr_zero((v_MACADDR_t *)&pMac->lim.spoofMacAddr)) ||
-                (pMac->roam.configParam.disableP2PMacSpoofing &&
-                pMac->lim.gpLimMlmScanReq->p2pSearch)) {
-                vos_mem_copy(gSelfMacAddr, pMac->lim.gSelfMacAddr, VOS_MAC_ADDRESS_LEN);
-            } else {
-                vos_mem_copy(gSelfMacAddr, pMac->lim.spoofMacAddr, VOS_MAC_ADDRESS_LEN);
-            }
+            if (spoof)
+                vos_mem_copy(gSelfMacAddr, pMac->lim.spoofMacAddr,
+                             VOS_MAC_ADDRESS_LEN);
+            else
+                vos_mem_copy(gSelfMacAddr, pMac->lim.gSelfMacAddr,
+                             VOS_MAC_ADDRESS_LEN);
+
             limLog(pMac, LOG1,
                  FL(" Mac Addr "MAC_ADDRESS_STR " used in sending ProbeReq number %d, for SSID %s on channel: %d"),
                       MAC_ADDR_ARRAY(gSelfMacAddr) ,i, pMac->lim.gpLimMlmScanReq->ssId[i].ssId, channelNum);
@@ -523,6 +554,16 @@ void limContinuePostChannelScan(tpAniSirGlobal pMac)
 
             // Initialize max timer too
             limDeactivateAndChangeTimer(pMac, eLIM_MAX_CHANNEL_TIMER);
+            if (tx_timer_activate(&pMac->lim.limTimers.gLimMaxChannelTimer) !=
+                                                                     TX_SUCCESS)
+            {
+                limLog(pMac, LOGE, FL("could not start max channel timer"));
+                limDeactivateAndChangeTimer(pMac, eLIM_MIN_CHANNEL_TIMER);
+                limDeactivateAndChangeTimer(pMac, eLIM_MAX_CHANNEL_TIMER);
+                limSendHalEndScanReq(pMac, channelNum,
+                                     eLIM_HAL_END_SCAN_WAIT_STATE);
+                return;
+            }
 #if defined WLAN_FEATURE_VOWIFI
         }
            else
@@ -1744,8 +1785,15 @@ limMlmAddBss (
     pAddBssParams->cfParamSet.cfpDurRemaining   = pMlmStartReq->cfParamSet.cfpDurRemaining;
 
     pAddBssParams->rateSet.numRates = pMlmStartReq->rateSet.numRates;
+    if (pAddBssParams->rateSet.numRates > SIR_MAC_RATESET_EID_MAX) {
+            limLog(pMac, LOGW,
+                   FL("num of sup rates %d exceeding the limit %d, resetting"),
+                   pAddBssParams->rateSet.numRates,
+                   SIR_MAC_RATESET_EID_MAX);
+            pAddBssParams->rateSet.numRates = SIR_MAC_RATESET_EID_MAX;
+    }
     vos_mem_copy(pAddBssParams->rateSet.rate,
-                 pMlmStartReq->rateSet.rate, pMlmStartReq->rateSet.numRates);
+                 pMlmStartReq->rateSet.rate, pAddBssParams->rateSet.numRates);
 
     pAddBssParams->nwType = pMlmStartReq->nwType;
 
@@ -1769,10 +1817,19 @@ limMlmAddBss (
     pAddBssParams->sessionId            = pMlmStartReq->sessionId; 
 
     //Send the SSID to HAL to enable SSID matching for IBSS
-    vos_mem_copy(&(pAddBssParams->ssId.ssId),
-                 pMlmStartReq->ssId.ssId,
-                 pMlmStartReq->ssId.length);
     pAddBssParams->ssId.length = pMlmStartReq->ssId.length;
+    if (pAddBssParams->ssId.length > SIR_MAC_MAX_SSID_LENGTH) {
+            limLog(pMac, LOGE,
+                   FL("Invalid ssid length %d, max length allowed %d"),
+                   pAddBssParams->ssId.length,
+                   SIR_MAC_MAX_SSID_LENGTH);
+            vos_mem_free(pAddBssParams);
+            return eSIR_SME_INVALID_PARAMETERS;
+    }
+    vos_mem_copy(pAddBssParams->ssId.ssId,
+                 pMlmStartReq->ssId.ssId,
+                 pAddBssParams->ssId.length);
+
     pAddBssParams->bHiddenSSIDEn = pMlmStartReq->ssidHidden;
     limLog( pMac, LOGE, FL( "TRYING TO HIDE SSID %d" ),pAddBssParams->bHiddenSSIDEn);
     // CR309183. Disable Proxy Probe Rsp.  Host handles Probe Requests.  Until FW fixed. 
@@ -2907,8 +2964,8 @@ limProcessMlmDisassocReqNtf(tpAniSirGlobal pMac, eHalStatus suspendStatus, tANI_
     tpPESession              psessionEntry;
     extern tANI_BOOLEAN     sendDisassocFrame;
     tSirSmeDisassocRsp      *pSirSmeDisassocRsp;
-    tANI_U32                *pMsg;
     tANI_U8                 *pBuf;
+    vos_msg_t               msg = {0};
 
     if(eHAL_STATUS_SUCCESS != suspendStatus)
     {
@@ -3032,10 +3089,14 @@ limProcessMlmDisassocReqNtf(tpAniSirGlobal pMac, eHalStatus suspendStatus, tANI_
          pBuf  = (tANI_U8 *) pSirSmeDisassocRsp->peerMacAddr;
          vos_mem_copy( pBuf, pMlmDisassocReq->peerMacAddr, sizeof(tSirMacAddr));
 
-         pMsg = (tANI_U32*) pSirSmeDisassocRsp;
+         msg.type = eWNI_SME_DISASSOC_RSP;
+         msg.bodyptr = pSirSmeDisassocRsp;
 
-         limSendSmeDisassocDeauthNtf( pMac, eHAL_STATUS_SUCCESS,
-                                                (tANI_U32*) pMsg );
+         if (pMac->lim.sme_msg_callback)
+             pMac->lim.sme_msg_callback(pMac, &msg);
+         else
+             limLog(pMac, LOGE, FL("Sme msg callback is NULL"));
+
          return;
 
     }
@@ -3239,8 +3300,7 @@ limProcessMlmDeauthReqNtf(tpAniSirGlobal pMac, eHalStatus suspendStatus, tANI_U3
     tpPESession             psessionEntry;
     tSirSmeDeauthRsp        *pSirSmeDeauthRsp;
     tANI_U8                 *pBuf;
-    tANI_U32                *pMsg;
-
+    vos_msg_t               msg = {0};
 
     if(eHAL_STATUS_SUCCESS != suspendStatus)
     {
@@ -3446,10 +3506,13 @@ limProcessMlmDeauthReqNtf(tpAniSirGlobal pMac, eHalStatus suspendStatus, tANI_U3
         pBuf  = (tANI_U8 *) pSirSmeDeauthRsp->peerMacAddr;
         vos_mem_copy( pBuf, pMlmDeauthReq->peerMacAddr, sizeof(tSirMacAddr));
 
-        pMsg = (tANI_U32*)pSirSmeDeauthRsp;
+        msg.type = eWNI_SME_DEAUTH_RSP;
+        msg.bodyptr = pSirSmeDeauthRsp;
 
-        limSendSmeDisassocDeauthNtf( pMac, eHAL_STATUS_SUCCESS,
-                                            (tANI_U32*) pMsg );
+        if (pMac->lim.sme_msg_callback)
+            pMac->lim.sme_msg_callback(pMac, &msg);
+        else
+            limLog(pMac, LOGE, FL("Sme msg callback is NULL"));
 
         return;
 
@@ -3516,6 +3579,96 @@ void limProcessDeauthAckTimeout(tpAniSirGlobal pMac)
     limLog(pMac, LOG1, FL(""));
     limSendDeauthCnf(pMac);
 }
+
+void lim_process_ap_ecsa_timeout(tpAniSirGlobal mac_ctx)
+{
+    tSirMsgQ msg = {0};
+    struct sir_ecsa_ie_complete_ind *ecsa_ie_cmp_ind;
+    tpPESession session;
+
+    session = peFindSessionBySessionId(mac_ctx,
+                        mac_ctx->lim.limTimers.g_lim_ap_ecsa_timer.sessionId);
+
+    if(!session)
+    {
+      limLog(mac_ctx, LOGE, FL("session does not exist for given sessionId %d"),
+             mac_ctx->lim.limTimers.g_lim_ap_ecsa_timer.sessionId);
+      return;
+    }
+    limLog(mac_ctx, LOG1, FL("session id %d switch count %d"),
+           mac_ctx->lim.limTimers.g_lim_ap_ecsa_timer.sessionId,
+           session->gLimChannelSwitch.switchCount);
+    /*
+     * For each beacon interval decrement switch count to use proper value
+     * in probe resp sent by host. Once it becomes 0 send tx complete
+     * indication to SME.
+     */
+    if (session->gLimChannelSwitch.switchCount > 0) {
+        session->gLimChannelSwitch.switchCount--;
+        lim_send_chan_switch_action_frame(mac_ctx,
+                 session->gLimChannelSwitch.primaryChannel, session);
+        mac_ctx->lim.limTimers.g_lim_ap_ecsa_timer.sessionId =
+                                             session->peSessionId;
+        limDeactivateAndChangeTimer(mac_ctx, eLIM_AP_ECSA_TIMER);
+
+        if (tx_timer_activate(&mac_ctx->lim.limTimers.g_lim_ap_ecsa_timer) !=
+            TX_SUCCESS)
+        {
+           limLog(mac_ctx, LOGE, FL("Couldn't activate g_lim_ap_ecsa_timer"));
+           lim_process_ap_ecsa_timeout(mac_ctx);
+        }
+        return;
+    }
+
+    session->include_ecsa_ie = false;
+    session->include_wide_ch_bw_ie = false;
+
+    ecsa_ie_cmp_ind = vos_mem_malloc(sizeof(*ecsa_ie_cmp_ind));
+    if(!ecsa_ie_cmp_ind)
+    {
+      limLog(mac_ctx, LOGE, FL("failed to allocate ecsa_ie_cmp_ind"));
+      return;
+    }
+    ecsa_ie_cmp_ind->session_id = session->smeSessionId;
+
+    msg.type = eWNI_SME_ECSA_IE_BEACON_COMP_IND;
+    msg.bodyptr = ecsa_ie_cmp_ind;
+    limSysProcessMmhMsgApi(mac_ctx, &msg, ePROT);
+    return;
+}
+
+void lim_send_sme_ap_channel_switch_resp(tpAniSirGlobal mac_ctx,
+          tpPESession session, tpSwitchChannelParams chan_params)
+{
+   tSirMsgQ msg = {0};
+   struct sir_channel_chanege_rsp *params;
+
+   params = vos_mem_malloc(sizeof(*params));
+   if (!params) {
+       limLog(mac_ctx, LOGE, FL("AllocateMemory failed for pSmeSwithChnlParams"));
+       return;
+   }
+
+   params->sme_session_id = session->smeSessionId;
+   params->new_channel = chan_params->channelNumber;
+   params->status = chan_params->status;
+
+   msg.type = eWNI_SME_ECSA_CHAN_CHANGE_RSP;
+   msg.bodyptr = params;
+   msg.bodyval = 0;
+   limSysProcessMmhMsgApi(mac_ctx, &msg, ePROT);
+
+   if (chan_params->channelNumber == session->currentOperChannel) {
+       limApplyConfiguration(mac_ctx, session);
+       limSendBeaconInd(mac_ctx, session);
+   } else {
+       limLog(mac_ctx, LOGE, FL("channel switch resp chan %d and session channel doesnt match %d"),
+              chan_params->channelNumber, session->currentOperChannel);
+   }
+
+   return;
+}
+
 
 /**
  * limProcessMlmDeauthReq()
@@ -3949,6 +4102,11 @@ limProcessMinChannelTimeout(tpAniSirGlobal pMac)
         pMac->lim.limTimers.gLimPeriodicProbeReqTimer.sessionId = 0xff;
         limDeactivateAndChangeTimer(pMac, eLIM_MIN_CHANNEL_TIMER);
         limDeactivateAndChangeTimer(pMac, eLIM_PERIODIC_PROBE_REQ_TIMER);
+        /*
+         * Deactivate Max Channel timer as well since no probe resp/beacons
+         * are received.
+         */
+        limDeactivateAndChangeTimer(pMac, eLIM_MAX_CHANNEL_TIMER);
         pMac->lim.probeCounter = 0;
         if (pMac->lim.gLimCurrentScanChannelId <=
                 (tANI_U32)(pMac->lim.gpLimMlmScanReq->channelList.numChannels - 1))
@@ -4111,23 +4269,16 @@ limProcessPeriodicProbeReqTimer(tpAniSirGlobal pMac)
          */
         do
         {
-            tSirMacAddr         gSelfMacAddr;
+            tSirMacAddr gSelfMacAddr;
+            bool        spoof = lim_is_spoofing_needed(pMac);
 
-            /* Send self MAC as src address if
-             * MAC spoof is not enabled OR
-             * spoofMacAddr is all 0 OR
-             * disableP2PMacSpoof is enabled and scan is P2P scan
-             * else use the spoofMac as src address
-             */
-            if ((pMac->lim.isSpoofingEnabled != TRUE) ||
-                (TRUE ==
-                vos_is_macaddr_zero((v_MACADDR_t *)&pMac->lim.spoofMacAddr)) ||
-                (pMac->roam.configParam.disableP2PMacSpoofing &&
-                pMac->lim.gpLimMlmScanReq->p2pSearch)) {
-                vos_mem_copy(gSelfMacAddr, pMac->lim.gSelfMacAddr, VOS_MAC_ADDRESS_LEN);
-            } else {
-                vos_mem_copy(gSelfMacAddr, pMac->lim.spoofMacAddr, VOS_MAC_ADDRESS_LEN);
-            }
+            if (spoof)
+                vos_mem_copy(gSelfMacAddr, pMac->lim.spoofMacAddr,
+                             VOS_MAC_ADDRESS_LEN);
+            else
+                vos_mem_copy(gSelfMacAddr, pMac->lim.gSelfMacAddr,
+                             VOS_MAC_ADDRESS_LEN);
+
             limLog( pMac, LOG1, FL("Mac Addr used in Probe Req is :"MAC_ADDRESS_STR),
                                    MAC_ADDR_ARRAY(gSelfMacAddr));
 

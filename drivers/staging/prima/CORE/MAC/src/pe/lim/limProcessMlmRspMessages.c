@@ -1233,6 +1233,13 @@ limFillAssocIndParams(tpAniSirGlobal pMac, tpLimMlmAssocInd pAssocInd,
 #endif
     // Fill in rate flags
     pSirSmeAssocInd->rate_flags = pAssocInd->rate_flags;
+
+    pSirSmeAssocInd->ch_width = pAssocInd->ch_width;
+    pSirSmeAssocInd->chan_info = pAssocInd->chan_info;
+    if (pAssocInd->HTCaps.present)
+        pSirSmeAssocInd->HTCaps = pAssocInd->HTCaps;
+    if (pAssocInd->VHTCaps.present)
+        pSirSmeAssocInd->VHTCaps = pAssocInd->VHTCaps;
 } /*** end limAssocIndSerDes() ***/
 
 
@@ -1259,7 +1266,7 @@ void
 limProcessMlmAssocInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 {
     tANI_U32            len;
-    tSirMsgQ            msgQ;
+    vos_msg_t msg;
     tSirSmeAssocInd    *pSirSmeAssocInd;
     tpDphHashNode       pStaDs=0;
     tpPESession         psessionEntry;
@@ -1283,12 +1290,13 @@ limProcessMlmAssocInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                FL("call to AllocateMemory failed for eWNI_SME_ASSOC_IND"));
         return;
     }
+    vos_mem_zero(pSirSmeAssocInd, len);
 
     pSirSmeAssocInd->messageType = eWNI_SME_ASSOC_IND;
     limFillAssocIndParams(pMac, (tpLimMlmAssocInd) pMsgBuf, pSirSmeAssocInd, psessionEntry);
-    msgQ.type = eWNI_SME_ASSOC_IND;
-    msgQ.bodyptr = pSirSmeAssocInd;
-    msgQ.bodyval = 0;
+    msg.type = eWNI_SME_ASSOC_IND;
+    msg.bodyptr = pSirSmeAssocInd;
+    msg.bodyval = 0;
     pStaDs = dphGetHashEntry(pMac,
                              ((tpLimMlmAssocInd) pMsgBuf)->aid, &psessionEntry->dph.dphHashTable);
     if (! pStaDs)
@@ -1302,12 +1310,10 @@ limProcessMlmAssocInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
     pSirSmeAssocInd->staId = pStaDs->staIndex;
    pSirSmeAssocInd->reassocReq = pStaDs->mlmStaContext.subType;
    MTRACE(macTrace(pMac, TRACE_CODE_TX_SME_MSG, psessionEntry->peSessionId,
-                                                             msgQ.type));
+                   msg.type));
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
     limDiagEventReport(pMac, WLAN_PE_DIAG_ASSOC_IND_EVENT, psessionEntry, 0, 0);
 #endif //FEATURE_WLAN_DIAG_SUPPORT
-    limSysProcessMmhMsgApi(pMac, &msgQ,  ePROT);
-
     limLog(pMac, LOG1,
        FL("Create CNF_WAIT_TIMER after received LIM_MLM_ASSOC_IND"));
     /*
@@ -1315,6 +1321,10 @@ limProcessMlmAssocInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
      **/
     limActivateCnfTimer(pMac, (tANI_U16) ((tpLimMlmAssocInd) pMsgBuf)->aid, psessionEntry);
 
+    if (pMac->lim.sme_msg_callback)
+        pMac->lim.sme_msg_callback(pMac, &msg);
+    else
+        limLog(pMac, LOGE, FL("Sme msg callback is NULL"));
 // Enable this Compile flag to test the BT-AMP -AP assoc sequence
 #ifdef TEST_BTAMP_AP
 //tANI_U32 *pMsgBuf;
@@ -4140,7 +4150,7 @@ void limProcessSwitchChannelRsp(tpAniSirGlobal pMac,  void *body)
     channelChangeReasonCode = psessionEntry->channelChangeReasonCode;
     // initialize it back to invalid id
     psessionEntry->channelChangeReasonCode = 0xBAD;
-    limLog(pMac, LOG1, FL("channelChangeReasonCode %d"),channelChangeReasonCode);
+    limLog(pMac, LOGE, FL("channelChangeReasonCode %d status %d"),channelChangeReasonCode, pChnlParams->status);
     switch(channelChangeReasonCode)
     {
         case LIM_SWITCH_CHANNEL_REASSOC:
@@ -4180,6 +4190,10 @@ void limProcessSwitchChannelRsp(tpAniSirGlobal pMac,  void *body)
                 }
                 pMac->lim.gpchangeChannelCallback(pMac, status, pMac->lim.gpchangeChannelData, psessionEntry);
             }
+            break;
+        case LIM_SWITCH_CHANNEL_SAP_ECSA:
+            lim_send_sme_ap_channel_switch_resp(pMac,
+                                                psessionEntry, pChnlParams);
             break;
         default:
             break;
